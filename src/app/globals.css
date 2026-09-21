@@ -1,0 +1,99 @@
+@import "tailwindcss";
+
+/*
+ * Sistema de diseño ASCE | UTEP Concrete Canoe.
+ * Colores MEDIDOS en la imagen de referencia: navy #003070, azul de acción #0060B0, ola #004088 / #3A98E2.
+ * Solo tema claro (la referencia lo es).
+ */
+@theme {
+  --color-navy: #003070;
+  --color-navy-deep: #002556;
+  --color-ocean: #004088;
+  --color-blue: #0060b0;
+  --color-blue-strong: #004f94;
+  --color-wave: #3a98e2;
+  --color-sky: #7cc4f2;
+  --color-mist: #e8f2fc;
+  --color-surface: #f1f7fd;
+  --color-line: #d3e1f0;
+  --color-ink: #0b1f3a;
+  --color-muted: #4a5b73;
+  --color-danger: #b42318;
+  --color-danger-strong: #912018;
+  --color-danger-bg: #fef3f2;
+
+  /* Inter variable, autoalojada (paquete @fontsource-variable/inter): sin fuentes externas. */
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Una sola sombra, suave. */
+  --shadow-card: 0 1px 2px rgb(0 32 74 / 0.06), 0 8px 24px -14px rgb(0 32 74 / 0.28);
+}
+
+/* Foto del hero (imagen-fondo.jpg) teñida de azul: se mezcla en luminosidad con el navy, sin tocar el archivo original. */
+.hero-photo {
+  background-color: var(--color-navy);
+  background-image: url("/brand/imagen-fondo.jpg");
+  background-size: cover;
+  background-position: 45% 40%;
+  background-repeat: no-repeat;
+  background-blend-mode: luminosity;
+}
+
+/*
+ * Foto de la pantalla del QR (la MISMA imagen-fondo.jpg). La persona está a ~36 % del ancho: en móvil (banner) se encuadra para que quede
+ * dentro del recorte; en escritorio la foto se ancla a la DERECHA para empujarla hacia la izquierda y dejar libre el centro-derecha.
+ */
+.qr-photo {
+  background-color: var(--color-navy);
+  background-image: url("/brand/imagen-fondo.jpg");
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: 18% 42%;
+  background-blend-mode: luminosity;
+}
+@media (min-width: 64rem) {
+  .qr-photo {
+    background-position: 100% 40%;
+  }
+}
+
+@layer base {
+  html {
+    color-scheme: light;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background: var(--color-surface);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Foco visible en todo el sitio; sobre fondos oscuros, celeste. */
+  :focus-visible {
+    outline: 3px solid var(--color-blue);
+    outline-offset: 2px;
+  }
+  .on-dark :focus-visible {
+    outline-color: var(--color-sky);
+  }
+
+  ::selection {
+    background: var(--color-sky);
+    color: var(--color-navy-deep);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
