@@ -18,7 +18,7 @@ const formMulti = (title: string, audiences: string[]) => {
   return fd;
 };
 
-const AUDIENCE_ERROR = "Choose at least one team: Design Team or Rowing & Construction.";
+const AUDIENCE_ERROR = "Choose a valid team: Design Team or Rowing & Construction.";
 
 describe("hora de El Paso <-> instante UTC (con horario de verano)", () => {
   it("septiembre (MDT, UTC-6) y enero (MST, UTC-7)", () => {
@@ -92,8 +92,8 @@ describe("New Session: solo Session Name + Required (Design Team y/o Rowing & Co
     for (const audience of SESSION_AUDIENCES) expect(audienceFromGroups(new Set(groupsFromAudience(audience)))).toBe(audience);
   });
 
-  it("ninguna casilla, o cualquier valor que no sea una de las dos, se RECHAZA en el servidor (incluidos los booleanos antiguos y \"both\" enviado a mano)", () => {
-    for (const bad of ["on", "true", "false", "required", "optional", "Design Team", "DESIGN_TEAM", "design-team", "everyone", "both", "", " design_team"]) {
+  it("un valor que no sea una de las dos casillas se RECHAZA en el servidor (incluidos los booleanos antiguos y \"both\" enviado a mano)", () => {
+    for (const bad of ["on", "true", "false", "required", "optional", "Design Team", "DESIGN_TEAM", "design-team", "everyone", "both", " design_team"]) {
       expect(parseSessionForm(form({ title: "Practice", audience: bad })), JSON.stringify(bad)).toEqual({
         ok: false,
         fieldErrors: { audience: AUDIENCE_ERROR },
@@ -101,10 +101,14 @@ describe("New Session: solo Session Name + Required (Design Team y/o Rowing & Co
     }
     // Un valor válido acompañado de uno inválido tampoco pasa.
     expect(parseSessionForm(formMulti("Practice", ["design_team", "everyone"]))).toEqual({ ok: false, fieldErrors: { audience: AUDIENCE_ERROR } });
-    expect(parseSessionForm(form({ title: "Practice" }))).toEqual({ ok: false, fieldErrors: { audience: AUDIENCE_ERROR } });
-    expect(parseSessionForm(formMulti("Practice", []))).toEqual({ ok: false, fieldErrors: { audience: AUDIENCE_ERROR } });
+  });
+
+  it("NO es obligatorio marcar ninguna casilla: sin ninguna marcada (o el campo ausente), cae al valor por defecto (remar_construction) sin error", () => {
+    expect(parseSessionForm(form({ title: "Practice" }))).toEqual({ ok: true, data: { title: "Practice", audience: DEFAULT_AUDIENCE } });
+    expect(parseSessionForm(formMulti("Practice", []))).toEqual({ ok: true, data: { title: "Practice", audience: DEFAULT_AUDIENCE } });
+    expect(parseSessionForm(form({ title: "Practice", audience: "" }))).toEqual({ ok: false, fieldErrors: { audience: AUDIENCE_ERROR } }); // "" enviado a mano no es "ninguna casilla"
     // El campo antiguo 'required' ya no significa nada.
-    expect(parseSessionForm(form({ title: "Practice", required: "on" })).ok).toBe(false);
+    expect(parseSessionForm(form({ title: "Practice", required: "on" }))).toMatchObject({ ok: true });
   });
 
   it("la regla de grupo: Design Team <-> miembros del Design Team; Rowing & Construction <-> el resto; Both teams <-> todos", () => {

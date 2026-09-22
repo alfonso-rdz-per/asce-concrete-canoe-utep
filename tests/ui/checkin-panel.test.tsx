@@ -1,6 +1,6 @@
 /**
- * Lo que ve el estudiante tras un QR válido: formulario ASCE ID + Name (solo el nombre, sin apellido, sin PIN) con "Remember me on this
- * device", el modo de dispositivo recordado ("Checking in as … / Not you? Switch member") y la confirmación.
+ * Lo que ve el estudiante tras un QR válido: formulario ASCE ID + Name (solo el nombre, sin apellido, sin PIN) con "Remember me",
+ * el modo de dispositivo recordado ("Checking in as … / Not you? Switch member") y la confirmación.
  */
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -30,12 +30,20 @@ function panel(action: Act = idle, over: Partial<React.ComponentProps<typeof Che
 }
 
 describe("formulario", () => {
-  it("confirma el QR y muestra sesión y el aviso de 3 minutos", () => {
-    panel();
-    expect(screen.getByRole("heading", { level: 1, name: "QR code accepted" })).toBeInTheDocument();
-    expect(screen.getByText("Concrete Canoe Practice")).toBeInTheDocument();
-    expect(screen.getByText(/You have 3 minutes to finish checking in \(until 6:03 PM\)/)).toBeInTheDocument();
-    expect(screen.getByText(/scan the QR code again/)).toBeInTheDocument();
+  it("confirma el QR y muestra sesión y una cuenta atrás pequeña y azul (3:00)", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(expiresAtMs - 3 * 60_000);
+    try {
+      panel();
+      expect(screen.getByRole("heading", { level: 1, name: "QR code accepted" })).toBeInTheDocument();
+      expect(screen.getByText("Concrete Canoe Practice")).toBeInTheDocument();
+      const timer = screen.getByRole("timer");
+      expect(timer).toHaveTextContent("3:00");
+      expect(timer).toHaveAttribute("aria-label", "Time left to check in: 3:00");
+      expect(timer.className).toMatch(/text-blue/);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("pide SOLO ASCE ID y Name (el campo se llama 'Name', no 'Full Name'); no hay PIN ni apellido", () => {
@@ -51,9 +59,9 @@ describe("formulario", () => {
     expect(screen.getByRole("button", { name: "Check in" })).toBeEnabled();
   });
 
-  it("incluye 'Remember me on this device' (casilla SIN marcar por defecto, sin tarjeta alrededor)", () => {
+  it("incluye 'Remember me' (casilla SIN marcar por defecto, sin tarjeta alrededor)", () => {
     panel();
-    const box = screen.getByRole("checkbox", { name: "Remember me on this device" });
+    const box = screen.getByRole("checkbox", { name: "Remember me" });
     expect(box).not.toBeChecked();
     expect(box).toHaveAttribute("name", "remember");
     expect(box.closest("label")?.className).not.toMatch(/\bborder\b|\bbg-white\b|\brounded-lg\b/);
@@ -113,13 +121,13 @@ describe("envío", () => {
     expect([...fd.keys()].sort()).toEqual(["asceId", "name", "ticket"]); // sin marcar 'Remember me' no se envía "remember"
   });
 
-  it("con 'Remember me on this device' marcada se envía remember=on (junto con ticket, ASCE ID y Name)", async () => {
+  it("con 'Remember me' marcada se envía remember=on (junto con ticket, ASCE ID y Name)", async () => {
     const user = userEvent.setup();
     const action = vi.fn<Act>(async () => ({ status: "idle" }));
     panel(action);
     await user.type(screen.getByLabelText("ASCE ID"), "12345678");
     await user.type(screen.getByLabelText("Name"), "Max");
-    await user.click(screen.getByRole("checkbox", { name: "Remember me on this device" }));
+    await user.click(screen.getByRole("checkbox", { name: "Remember me" }));
     await user.click(screen.getByRole("button", { name: "Check in" }));
     await waitFor(() => expect(action).toHaveBeenCalledTimes(1));
     const fd = action.mock.calls[0][1];
@@ -148,7 +156,7 @@ describe("envío", () => {
     panel(action);
     await user.type(screen.getByLabelText("ASCE ID"), "12345678");
     await user.type(screen.getByLabelText("Name"), "Max");
-    await user.click(screen.getByRole("checkbox", { name: "Remember me on this device" }));
+    await user.click(screen.getByRole("checkbox", { name: "Remember me" }));
     await user.click(screen.getByRole("button", { name: "Check in" }));
     expect(await screen.findByText("This device will remember you next time.")).toBeInTheDocument();
   });
@@ -173,7 +181,7 @@ describe("envío", () => {
     panel(action);
     await user.click(screen.getByRole("button", { name: "Check in" }));
     await screen.findByText("ASCE ID or name is incorrect. Check them and try again.");
-    expect(screen.getByRole("checkbox", { name: "Remember me on this device" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Remember me" })).toBeChecked();
   });
 
   it("errores de formato por campo, con foco en el primero", async () => {
@@ -261,7 +269,7 @@ describe("dispositivo recordado (Remember me)", () => {
     await waitFor(() => expect(switchAction).toHaveBeenCalledTimes(1));
     expect(await screen.findByLabelText("ASCE ID")).toBeInTheDocument();
     expect(screen.getByLabelText("Name")).toHaveValue("");
-    expect(screen.getByRole("checkbox", { name: "Remember me on this device" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Remember me" })).not.toBeChecked();
     expect(screen.queryByText("Checking in as")).toBeNull();
     await waitFor(() => expect(screen.getByLabelText("ASCE ID")).toHaveFocus());
   });

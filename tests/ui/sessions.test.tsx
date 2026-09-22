@@ -145,15 +145,28 @@ describe("SessionForm: New Session solo pide Session Name + Required (Design Tea
     expect(screen.getByRole("checkbox", { name: "Rowing & Construction" })).toBeChecked(); // …incluidas las dos a la vez
   });
 
-  it("un error del grupo (ninguna casilla marcada) se muestra junto a las opciones y las deja sin marcar", async () => {
+  it("un error del grupo (valor inválido enviado a mano) se muestra junto a las opciones y las deja sin marcar", async () => {
     const user = userEvent.setup();
-    const message = "Choose at least one team: Design Team or Rowing & Construction.";
+    const message = "Choose a valid team: Design Team or Rowing & Construction.";
     const action: Act = async () => ({ status: "error", message: "Please fix the highlighted field.", fieldErrors: { audience: message }, values: { title: "x", audience: "" } });
     render(<SessionForm action={action} />);
     await user.click(screen.getByRole("button", { name: "Start check-in" }));
     expect(await screen.findByText(message)).toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: "Design Team" })).not.toBeChecked();
     expect(screen.getByRole("checkbox", { name: "Rowing & Construction" })).not.toBeChecked();
+  });
+
+  it("NO es obligatorio marcar ninguna casilla: desmarcando las dos, se envía igual y cae al valor por defecto en el servidor", async () => {
+    const user = userEvent.setup();
+    const action = vi.fn<Act>(async () => ({ status: "idle" }));
+    render(<SessionForm action={action} />);
+    await user.type(screen.getByLabelText("Session Name"), "Open house");
+    await user.click(screen.getByRole("checkbox", { name: "Rowing & Construction" })); // desmarca la única marcada por defecto
+    expect(screen.getByRole("checkbox", { name: "Design Team" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Rowing & Construction" })).not.toBeChecked();
+    await user.click(screen.getByRole("button", { name: "Start check-in" }));
+    await waitFor(() => expect(action).toHaveBeenCalledTimes(1));
+    expect(action.mock.calls[0][1].getAll("audience")).toEqual([]);
   });
 
   it("con un check-in en curso NO ofrece abrir otro: avisa y enlaza a su QR (sin botón de guardar borrador)", () => {

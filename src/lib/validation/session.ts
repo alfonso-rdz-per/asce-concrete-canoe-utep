@@ -36,11 +36,12 @@ export function parseTitle(raw: string): { value?: string; error?: string } {
   return { value };
 }
 
-const AUDIENCE_ERROR = "Choose at least one team: Design Team or Rowing & Construction.";
+const AUDIENCE_ERROR = "Choose a valid team: Design Team or Rowing & Construction.";
 
 /**
- * Cada casilla marcada envía UN valor `audience` (design_team / remar_construction). Uno o los dos valores son válidos (los dos = ambos
- * equipos); cualquier otro valor (o ninguno) se rechaza en el servidor.
+ * Cada casilla marcada envía UN valor `audience` (design_team / remar_construction). No es obligatorio marcar ninguna: se puede
+ * elegir un equipo, el otro, los dos (-> "both") o NINGUNO (sin casillas marcadas cae al valor por defecto, DEFAULT_AUDIENCE). Solo
+ * se rechaza un valor que no sea uno de los dos grupos (por ejemplo, un POST manipulado a mano).
  */
 export function parseAudience(raw: readonly string[]): { value?: SessionAudience; error?: string } {
   const groups = new Set<TeamGroup>();
@@ -48,8 +49,7 @@ export function parseAudience(raw: readonly string[]): { value?: SessionAudience
     if (!isTeamGroup(item)) return { error: AUDIENCE_ERROR };
     groups.add(item);
   }
-  const value = audienceFromGroups(groups);
-  return value ? { value } : { error: AUDIENCE_ERROR };
+  return { value: audienceFromGroups(groups) ?? DEFAULT_AUDIENCE };
 }
 
 function textList(formData: FormData, key: string): string[] {

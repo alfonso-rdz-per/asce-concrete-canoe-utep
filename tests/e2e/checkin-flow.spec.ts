@@ -246,7 +246,7 @@ test("7. Estudiante sin cookies: QR -> 'QR code accepted' -> ASCE ID + Name (sin
     expect(res?.headers()["referrer-policy"]).toBe("no-referrer");
     await expect(student.getByRole("heading", { level: 1, name: "QR code accepted" })).toBeVisible();
     await expect(student.getByText(TITLE)).toBeVisible();
-    await expect(student.getByText(/You have 3 minutes to finish checking in/)).toBeVisible();
+    await expect(student.getByRole("timer")).toHaveText("3:00");
 
     // Formulario: SOLO ASCE ID y Name (no "Full Name", no PIN); el ticket va oculto.
     await expect(student.getByLabel("ASCE ID")).toBeEnabled();
@@ -420,7 +420,7 @@ test("12. Cerrar la sesión: el QR desaparece y el QR/ticket dejan de aceptarse 
 });
 
 // ================================================================================================================
-// Remember me on this device · Switch member · miembro inactivo · eliminar sesiones · diseño móvil
+// Remember me · Switch member · miembro inactivo · eliminar sesiones · diseño móvil
 // ================================================================================================================
 async function addMember(page: Page, asceId: string, fullName: string) {
   await page.goto("/admin/members/new");
@@ -458,7 +458,7 @@ const qrToken = async (page: Page, id: string) => ((await (await page.request.ge
 const attendance = async (page: Page, id: string) => (await page.request.get(`/api/admin/sessions/${id}/attendance`)).json();
 const deviceCookie = async (context: BrowserContext) => (await context.cookies()).find((c) => c.name === DEVICE_COOKIE);
 
-test("13. Remember me (primera vez): QR -> ASCE ID + Name -> 'Remember me on this device' -> Check in; cookie HttpOnly y NADA en localStorage", async ({ page, browser, baseURL }) => {
+test("13. Remember me (primera vez): QR -> ASCE ID + Name -> 'Remember me' -> Check in; cookie HttpOnly y NADA en localStorage", async ({ page, browser, baseURL }) => {
   await addMember(page, ASCE_ID_2, "Lily Nguyen");
   remSessionA = await startSessionViaUi(page, `[VALIDACIÓN] E2E remember A ${STAMP}`);
   const tokenA = await qrToken(page, remSessionA);
@@ -467,7 +467,7 @@ test("13. Remember me (primera vez): QR -> ASCE ID + Name -> 'Remember me on thi
   const student = phone.page;
   await student.goto(`/c/${tokenA}`);
   await expect(student.getByRole("heading", { level: 1, name: "QR code accepted" })).toBeVisible();
-  const remember = student.getByRole("checkbox", { name: "Remember me on this device" });
+  const remember = student.getByRole("checkbox", { name: "Remember me" });
   await expect(remember).toBeVisible();
   await expect(remember).not.toBeChecked();
   await expect(student.getByText("Checking in as")).toHaveCount(0);
@@ -559,7 +559,7 @@ test("15. 'Not you? Switch member': olvida el dispositivo, vuelve al formulario 
   await expect(student.getByLabel("ASCE ID")).toHaveValue("");
   await expect(student.getByLabel("ASCE ID")).toBeFocused();
   await expect(student.getByLabel("Name", { exact: true })).toHaveValue("");
-  await expect(student.getByRole("checkbox", { name: "Remember me on this device" })).not.toBeChecked();
+  await expect(student.getByRole("checkbox", { name: "Remember me" })).not.toBeChecked();
   await expect(student.getByText("Checking in as")).toHaveCount(0);
   expect(await deviceCookie(phone!.context), "la cookie se borra").toBeUndefined();
 
@@ -582,7 +582,7 @@ test("15. 'Not you? Switch member': olvida el dispositivo, vuelve al formulario 
   // Otro miembro en el mismo teléfono: Max (ya registrado en la primera sesión) entra y recuerda el dispositivo.
   await student.getByLabel("ASCE ID").fill(ASCE_ID);
   await student.getByLabel("Name", { exact: true }).fill("Max");
-  await student.getByRole("checkbox", { name: "Remember me on this device" }).check();
+  await student.getByRole("checkbox", { name: "Remember me" }).check();
   const answered = student.waitForResponse((r) => r.request().method() === "POST" && r.url().includes("/c/"));
   await student.getByRole("button", { name: "Check in" }).click();
   expect((await answered).status()).toBe(200);
@@ -600,7 +600,7 @@ test("16. Miembro INACTIVO: al desactivarlo su dispositivo deja de reconocerlo y
   const zed = await studentPage(browser, baseURL);
   try {
     await zed.page.goto(`/c/${await qrToken(page, remSessionB)}`);
-    await zed.page.getByRole("checkbox", { name: "Remember me on this device" }).check();
+    await zed.page.getByRole("checkbox", { name: "Remember me" }).check();
     await submitStudentForm(zed.page, ASCE_ID_3, "Zed");
     await expect(zed.page.getByRole("heading", { name: "Check-in successful!" })).toBeVisible();
     expect((await deviceCookie(zed.context))?.value).toMatch(/^d1\./);
@@ -634,7 +634,7 @@ test("17. Diseño del estudiante en móvil: canoe-draw.png y el fondo azul se ve
     await mobile.goto(`/c/${await qrToken(page, remSessionB)}`);
     await expect(mobile.getByRole("heading", { level: 1, name: "QR code accepted" })).toBeVisible();
     await expect(mobile.getByLabel("ASCE ID")).toBeVisible();
-    await expect(mobile.getByRole("checkbox", { name: "Remember me on this device" })).toBeVisible();
+    await expect(mobile.getByRole("checkbox", { name: "Remember me" })).toBeVisible();
     await mobile.waitForLoadState("networkidle");
 
     // Ilustración: el PNG exacto, cargado, con su proporción original.
