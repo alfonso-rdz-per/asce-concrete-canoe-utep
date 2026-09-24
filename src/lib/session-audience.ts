@@ -22,10 +22,6 @@ export const AUDIENCE_LABEL: Record<SessionAudience, string> = {
   both: "Both teams",
 };
 
-export function isSessionAudience(value: unknown): value is SessionAudience {
-  return typeof value === "string" && (SESSION_AUDIENCES as readonly string[]).includes(value);
-}
-
 export function isTeamGroup(value: unknown): value is TeamGroup {
   return typeof value === "string" && (TEAM_GROUPS as readonly string[]).includes(value);
 }

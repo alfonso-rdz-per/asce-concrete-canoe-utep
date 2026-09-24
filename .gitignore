@@ -30,7 +30,7 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (solo .env.example se versiona)
+# env files (only .env.example is committed)
 .env*
 !.env.example
 
@@ -41,9 +41,12 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# validación contra Supabase real (credenciales temporales de prueba)
+# real Supabase validation (temporary test credentials)
 tests/supabase/.state.json
 
 # Playwright
 /test-results/
 /playwright-report/
+
+# Local design reference image (kept out of the repository)
+/imagen de como se debe de ver rl diseno.png

@@ -37,13 +37,6 @@ export function formatMeetingDate(iso: string): string {
   return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeZone: APP_TIME_ZONE }).format(ms);
 }
 
-/** "Sep 19, 2026, 6:00 PM" para un instante (ISO 8601), en la zona horaria del equipo. "—" si no es válido. */
-export function formatMeetingDateTime(iso: string): string {
-  const ms = Date.parse(iso);
-  if (!Number.isFinite(ms)) return "—";
-  return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: APP_TIME_ZONE }).format(ms);
-}
-
 /** "Sep 19, 2026 · 7:42 PM" (hora de El Paso). "—" si no es una fecha válida. */
 export function formatDateDotTime(iso: string): string {
   const ms = Date.parse(iso);

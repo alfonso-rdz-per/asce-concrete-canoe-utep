@@ -42,6 +42,11 @@ async function withClient<T>(port: number, database: string, fn: (c: pg.Client) 
  * supabase/migrations en orden. Cada prueba clona esa plantilla.
  */
 export default async function setup(project: TestProject) {
+  // embedded-postgres registra async-exit-hook, que en `beforeExit` llama a process.exit(0): eso taparía el código de salida con el
+  // que Vitest señala pruebas fallidas (la CI saldría en verde). Si ya hay un código de error fijado, se conserva.
+  const exit = process.exit.bind(process);
+  process.exit = ((code?: number | string | null) => exit(code === 0 && process.exitCode ? process.exitCode : code)) as typeof process.exit;
+
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "asce-pg-"));
   const port = await freePort();
   const server = new EmbeddedPostgres({

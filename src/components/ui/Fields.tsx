@@ -57,49 +57,6 @@ export function TextField({
   );
 }
 
-export function TextAreaField({
-  label,
-  name,
-  hint,
-  error,
-  optional,
-  className = "",
-  ...area
-}: BaseProps & Omit<ComponentProps<"textarea">, "name" | "id" | "aria-invalid" | "aria-describedby">) {
-  const id = `field-${name}`;
-  const hintId = hint ? `${id}-hint` : undefined;
-  const errorId = error ? `${id}-error` : undefined;
-  const describedBy = [hintId, errorId].filter(Boolean).join(" ") || undefined;
-
-  return (
-    <div className="space-y-1.5">
-      <label htmlFor={id} className="block text-sm font-semibold text-ink">
-        {label}
-        {optional ? <span className="ml-1.5 font-normal text-muted">(optional)</span> : null}
-      </label>
-      <textarea
-        id={id}
-        name={name}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={describedBy}
-        className={`${INPUT_CLASSES} min-h-28 py-3 ${error ? "border-danger" : "border-line"} ${className}`.trim()}
-        {...area}
-      />
-      {hint ? (
-        <p id={hintId} className="text-sm text-muted">
-          {hint}
-        </p>
-      ) : null}
-      {error ? (
-        <p id={errorId} role="alert" className="text-sm font-medium text-danger">
-          {error}
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
-/** Casilla con etiqueta y ayuda; el área táctil ocupa toda la fila (>= 48 px). */
 /** Casilla simple SIN tarjeta ni contorno: solo la casilla y su texto (alto táctil de 44 px). */
 export function CheckboxField({
   label,
@@ -117,47 +74,6 @@ export function CheckboxField({
       </label>
       {hint ? (
         <p id={hintId} className="pl-8 text-sm text-muted">
-          {hint}
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
-/**
- * Interruptor "Etiqueta [ ●] On/Off" sin tarjeta alrededor. Es una casilla nativa (role="switch"), así que el formulario la envía como
- * cualquier casilla ("on" si está activada) y funciona con teclado y lectores de pantalla. Apagado = gris oscuro, encendido = azul.
- */
-export function ToggleField({
-  label,
-  name,
-  hint,
-  ...input
-}: Pick<BaseProps, "label" | "name" | "hint"> & Omit<ComponentProps<"input">, "name" | "id" | "type" | "role" | "aria-describedby">) {
-  const id = `field-${name}`;
-  const hintId = hint ? `${id}-hint` : undefined;
-  return (
-    <div>
-      <label htmlFor={id} className="flex min-h-11 cursor-pointer items-center gap-3 text-base font-semibold text-ink">
-        {label}
-        <input
-          id={id}
-          name={name}
-          type="checkbox"
-          role="switch"
-          aria-describedby={hintId}
-          className="peer relative h-7 w-12 shrink-0 cursor-pointer appearance-none rounded-full bg-muted transition-colors before:absolute before:left-0.5 before:top-0.5 before:h-6 before:w-6 before:rounded-full before:bg-white before:shadow before:transition-transform before:content-[''] checked:bg-blue checked:before:translate-x-5"
-          {...input}
-        />
-        <span aria-hidden="true" className="text-sm font-medium text-muted peer-checked:hidden">
-          Off
-        </span>
-        <span aria-hidden="true" className="hidden text-sm font-medium text-blue peer-checked:inline">
-          On
-        </span>
-      </label>
-      {hint ? (
-        <p id={hintId} className="text-sm text-muted">
           {hint}
         </p>
       ) : null}

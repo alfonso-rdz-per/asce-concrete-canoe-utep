@@ -97,7 +97,6 @@ beforeAll(() => {
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "publishable-test-key");
   vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "service-role-test-key");
   vi.stubEnv("SERVER_SECRET", SERVER_SECRET);
-  vi.stubEnv("PIN_PEPPER", "p".repeat(48));
 });
 beforeEach(() => {
   getAdminMock.mockReset();

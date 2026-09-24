@@ -89,12 +89,6 @@ export interface CheckinStore {
   insertCheckin(row: NewCheckin): Promise<InsertCheckinResult>;
 }
 
-export interface CheckinLimits {
-  perTicket: { max: number; windowMs: number };
-  perAsceId: { max: number; windowMs: number };
-  perIp: { max: number; windowMs: number };
-}
-
 /** Fallos permitidos ANTES de bloquear. La ventana por ticket es su propia vida (3 min por defecto). */
 export const DEFAULT_LIMITS = {
   perTicket: { max: 5 },

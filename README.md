@@ -1,89 +1,156 @@
-# ASCE | UTEP Concrete Canoe Team · Check-In
+# ASCE Concrete Canoe | UTEP
 
-Registro de asistencia del equipo de Concrete Canoe. El administrador muestra un QR que cambia cada 10 s; los
-miembros lo escanean con la cámara del teléfono, introducen su ASCE ID y su nombre (Name), y el servidor valida todo.
-Sin apps que instalar. La interfaz está 100 % en inglés.
+**Status: 🚧 In Progress**
 
-**Estado: Fase 5 (Attendance / Historial) implementada y validada** sobre la Fase 4 (sesiones, QR dinámico, ticket y check-in del estudiante con ASCE ID + Name, Remember me, grupos Design Team / Rowing & Construction (o los dos a la vez), corrección manual de asistencia y borrado de sesiones). Migraciones 1–13 aplicadas en Supabase real. Validación: 125 pruebas contra Supabase real (1 omitida), 785 pruebas de Vitest, E2E con Playwright en escritorio, iPhone y Android (incluye 21 pruebas de Attendance), typecheck, lint y build limpios; detalle en [docs/SUPABASE-VALIDATION.md](docs/SUPABASE-VALIDATION.md). Aún no hay despliegue.
+A web platform to support the management and organization of the ASCE Concrete Canoe Team at UTEP.
 
-Ya existe: login de administradores, panel, Miembros (alta, edición, desactivar/reactivar, cargo, Design Team), sesiones, pantalla del QR, check-in del estudiante, dashboard con porcentaje de asistencia por miembro, el historial de cada miembro (con corrección Present ↔ Absent) y **Attendance**: historial de reuniones cerradas con presentes / esperados y porcentaje (filtro por grupo) y, en cada reunión cerrada, el roster de los miembros esperados con corrección Present ↔ Absent (ver [docs/ATTENDANCE.md](docs/ATTENDANCE.md)). Marca `ASCE | UTEP` (con marcadores hasta tener los logos oficiales), footer con Instagram, interfaz 100 % en inglés, CSP con nonce y accesibilidad (Playwright + axe).
+The first module, **Attendance**, is complete and validated against a real Supabase project (not yet deployed). The platform is
+designed to grow into a team and project management tool; see the [Roadmap](#roadmap).
 
-## Hoja de ruta
+## Current module: Attendance
 
-| Fase | Contenido | Estado |
+A mobile-first check-in system for team meetings. An admin opens a check-in session and projects a QR code that changes every
+10 seconds; members scan it with their phone's native camera, confirm who they are, and the server records their attendance.
+No app to install, no student accounts.
+
+### The problem
+
+Paper sign-in sheets and shared spreadsheets are slow, easy to fill in on someone else's behalf, and make it hard to answer simple
+questions such as *"what is this member's attendance rate?"* This app replaces them with a check-in that takes a few seconds per
+person, requires having seen the QR code shown in the room, and keeps an auditable attendance history in PostgreSQL.
+
+### Features
+
+**Student check-in**
+- Rotating QR code (new code every 10 s) opened with the phone's native camera.
+- Scanning exchanges the QR token for a short-lived, signed check-in ticket (3 min), so a slow typist is not rushed by the QR rotation.
+- Identification with **ASCE ID + name**; optional **"Remember me"** so a returning device only needs to tap *Check in*.
+- One attendance per member per session, enforced by the database.
+
+**Admin panel** (Supabase Auth; no public sign-up)
+- **Members:** create, edit, deactivate/reactivate, position, and *Design Team* membership.
+- **Sessions:** start a check-in (full-screen QR view with a live attendee counter), close it, or delete it.
+- **Team audiences:** a session can target *Design Team*, *Rowing & Construction*, or both teams; each member's percentage only counts
+  the meetings aimed at their group.
+- **Attendance:** history of closed meetings (present / expected / rate, filterable by team), per-member history, and a dashboard with
+  every active member's attendance percentage.
+- **Manual corrections:** Present ↔ Absent on closed meetings, stored separately from real check-ins.
+- **Audit log:** manual attendance changes and session deletions are recorded by database triggers in an append-only `audit_log`.
+
+## Architecture
+
+```
+Phone camera ──► /c/<qr-token> ──► server verifies QR (HMAC, server time) ──► issues signed ticket
+                                                                                   │
+Admin QR screen ◄── /api/admin/sessions/[id]/qr (tokens for current + next slot)   ▼
+                                                        ASCE ID + name (or remembered device)
+                                                                                   │
+                                                  Server Action ──► checks ticket, rate limits,
+                                                                    active session, active member
+                                                                                   │
+                                                                   PostgreSQL (constraints, triggers, RLS)
+```
+
+- **Next.js App Router** with Server Components and Server Actions. The browser never talks to Supabase directly
+  (`connect-src 'self'`); every read and write goes through the server.
+- **Two Supabase clients, both server-only.** The admin panel uses the admin's session cookie, so every query runs under **Row Level
+  Security**. The public check-in path uses a `service_role` client confined to `server-only` modules with narrowly scoped grants.
+- **Pure core, injected dependencies.** QR/ticket verification (`src/lib/checkin/gate.ts`) and check-in submission
+  (`src/lib/checkin/submit.ts`) receive the clock, keys and data store as arguments, so the security logic is unit-tested without a
+  network or a database.
+- **The database is the source of truth.** Attendance percentages, expected attendees and manual corrections are computed by SQL views
+  (`session_attendance`, `member_attendance`, `session_attendance_summary`), not reassembled in JavaScript.
+
+```
+src/
+  app/            routes: public landing, /c/[token] check-in, /admin panel, admin API routes
+  components/     admin, check-in, brand and UI components
+  lib/            tokens, tickets, device tokens, check-in gate/submission, validation, data access, auth
+  proxy.ts        per-request CSP nonce, session refresh, optimistic /admin redirect
+supabase/migrations/   schema, RLS, grants, triggers and views (15 migrations)
+tests/            unit · ui (jsdom) · db (real Postgres 17) · supabase (live project) · e2e (Playwright)
+```
+
+## Security
+
+- **Signed, stateless QR tokens.** `v1.<session>.<slot>.<mac>`: HMAC-SHA256 over the session id and a 10-second time slot, validated
+  only against server time (5 s grace by default). Nothing about validity is decided by the browser or the phone's clock.
+- **Separate keys per purpose.** QR, ticket, IP-hash and device keys are derived from a single `SERVER_SECRET` with HKDF, so a MAC for
+  one purpose is never valid for another. MACs are compared in constant time.
+- **Rate limiting** of failed check-ins per ticket, per ASCE ID and per (HMAC-hashed) IP address, backed by the `checkin_attempts` table.
+- **No member enumeration.** An unknown ASCE ID, an inactive member and a wrong name all return the same generic error.
+- **"Remember me" without stored credentials.** A random 256-bit token lives in an `HttpOnly`, path-scoped cookie; the database only
+  stores its HMAC. Devices expire (180 days after last use, 365 days max), are capped at 5 per member, and are revoked when a member is
+  deactivated. A remembered device never replaces the QR scan.
+- **Row Level Security on every table**, column-level grants for admins, no table access for `anon`, an append-only `audit_log`,
+  and database-enforced invariants (one active session, sessions never reopen, one check-in per member and session, single-use tickets).
+- **Defense in depth on the web layer:** nonce-based Content-Security-Policy, `X-Frame-Options: DENY`, HSTS, `no-store` on
+  admin/API/check-in routes, and an authoritative `requireAdmin()` check in every admin page, Server Action and API route.
+
+More detail: [docs/TOKENS.md](docs/TOKENS.md) (what QR tokens and tickets do and do not prove) and
+[docs/ADMIN-ACCESS.md](docs/ADMIN-ACCESS.md). *(The design notes in `docs/` are written in Spanish.)*
+
+## Tech stack
+
+Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS 4 · Supabase (PostgreSQL + Auth) · Zod · Vitest · Playwright + axe-core ·
+GitHub Actions · Vercel (planned hosting)
+
+## Testing
+
+| Suite | Command | What it covers |
 |---|---|---|
-| 0–2 | Esquema, seguridad/RLS, tokens y tickets | Hecha |
-| 3 | Login de administradores, panel, Miembros, marca, CSP, accesibilidad | Hecha |
-| 4 | Sesiones, QR dinámico, check-in del estudiante (incluye lo que el plan original llamaba «Fase 5», con límites de intentos y auditoría), Remember me, grupos, borrado de sesiones | Cerrada |
-| 5 | **Attendance / Historial**: `/admin/attendance` (reuniones cerradas con fecha, grupo, presentes / esperados, porcentaje y filtro por grupo) y detalle de sesión cerrada con el roster Present/Absent y corrección manual (migración 13: `session_attendance_summary` con `expected_count` y `rate`) | Hecha |
-| Después | Despliegue en Vercel Hobby y cron diario contra la pausa por inactividad de Supabase Free. Aún no se ha tocado Vercel ni producción | Por planificar |
+| Unit | `npm run test:unit` | Tokens, tickets, crypto, validation, check-in logic, static security checks |
+| UI | `npm run test:ui` | React components in jsdom |
+| Database | `npm run test:db` | Migrations, RLS, grants, triggers, views and concurrency on a real embedded PostgreSQL 17 (no Docker) |
+| Supabase | `npm run test:supabase` | The same guarantees against a live Supabase project ([docs/SUPABASE-VALIDATION.md](docs/SUPABASE-VALIDATION.md)) |
+| End-to-end | `npm run test:e2e` | Playwright on desktop Chrome, iPhone (WebKit) and Android, with axe accessibility checks |
 
-`docs/PHASE-3-PROPOSAL.md` es un documento **histórico**: su tabla de cortes (§0.1) describe el plan original, que esta hoja de ruta reemplaza.
+`npm test` runs the unit, UI and database suites (~800 tests); CI runs lint, typecheck, those tests and a production build on every push.
 
-- [Puesta en marcha](docs/SETUP.md)
-- [Attendance: cómo se cuenta la asistencia (en vivo vs. reuniones cerradas, esperados, porcentaje, correcciones)](docs/ATTENDANCE.md)
-- [Tokens QR y tickets: qué demuestran y qué no](docs/TOKENS.md)
-- [Acceso de administradores](docs/ADMIN-ACCESS.md)
-- [Validación contra Supabase real](docs/SUPABASE-VALIDATION.md)
-- [Logos pendientes](public/brand/README.md)
+## Getting started
 
-## Stack (todo gratuito)
+Requirements: Node.js 22+ and a Supabase project.
 
-Next.js 16 · TypeScript · Tailwind · Inter (autoalojada) · Supabase (Postgres + Auth) · Vercel Hobby · Vitest · Playwright + axe.
-
-## Estructura
-
-```
-src/lib/
-  tokens.ts        token QR firmado (HMAC), ventana de validez con gracia
-  tickets.ts       ticket firmado que se canjea al escanear
-  device-token.ts  token de «Remember me» (256 bits aleatorios, solo se guarda su HMAC), caducidad y revocación
-  member-name.ts   comparación de «Name» (sin acentos/mayúsculas; nombre completo o prefijo de palabras completas)
-  checkin/         puerta QR/ticket y check-in del estudiante (ASCE ID + Name, límites y auditoría)
-  time.ts          reloj inyectable (la hora autoritativa es la del servidor)
-  env.ts           validación de variables de entorno (solo servidor)
-  crypto/          HKDF, HMAC, codificación de ids
-  supabase/server.ts cliente de sesión de administrador (cookies HttpOnly, aplica RLS)
-  supabase/admin.ts  cliente service_role (server-only; lo usa el check-in del estudiante)
-  auth/              requireAdmin (DAL), regla de administrador, display_name, guardián de Auth
-  data/members.ts    acceso a miembros con lista explícita de columnas
-  data/attendance.ts dashboard, historial por miembro, corrección manual, historial de reuniones cerradas y roster (RLS del admin)
-  attendance.ts · positions.ts   porcentaje/estados/formato de asistencia y cargos (sin dependencias)
-  data/sessions.ts   sesiones (borrador → activa → cerrada), asistencia en vivo y lista con el conteo en vivo de la activa (RLS del admin)
-  checkin/gate.ts    canje del QR por ticket y validación del ticket (puro: hora/claves/BD inyectadas)
-  checkin/server.ts  cableado de producción de la puerta (hora del servidor, claves, service_role)
-  qr-display.ts      qué QR dibujar / cuándo refrescar (anclado a la hora del servidor)
-src/proxy.ts           CSP con nonce, refresco de sesión y redirección optimista
-src/app/(public)/      inicio de estudiantes y destino del QR (/c/[token]) · src/app/admin/  login, panel, miembros, sesiones y Attendance
-src/app/admin/sessions/[id]/qr   pantalla del QR (pantalla completa, fuera del shell) · src/app/api/admin/sessions/[id]/{qr,attendance}   API del admin
-src/components/        brand (ASCE | UTEP, footer, olas), ui, admin
-supabase/migrations/   15 migraciones (las 13 primeras aplicadas en Supabase real; la 14 y la 15, sesiones para los dos equipos, PENDIENTES): esquema, seguridad/RLS, administrador desde Auth, corrección de
-                       borrado, cargo (position), correcciones manuales de asistencia + vistas del porcentaje, ubicación de sesiones,
-                       dispositivos recordados, borrado de sesiones + inicio directo, PIN eliminado, Design Team, grupo de la sesión (audience),
-                       resumen por reunión con esperados y porcentaje (session_attendance_summary), sesiones dirigidas a los dos equipos (audience = both)
-tests/unit/            lógica pura, criptografía, pruebas estáticas de seguridad, guarda de idioma
-tests/ui/              componentes (jsdom)
-tests/db/              RLS, integridad, concurrencia y regla de administrador (Postgres 17 real)
-tests/supabase/        validación contra Supabase REAL
-tests/e2e/             Playwright + axe (escritorio, iPhone, Android)
+```bash
+npm install
+cp .env.example .env.local   # then fill in the values (see below)
+npm run dev
 ```
 
-## Principios de seguridad
+Apply the migrations in `supabase/migrations/` in order and create admin users in Supabase Auth — step-by-step instructions in
+[docs/SETUP.md](docs/SETUP.md).
 
-- El servidor es la única autoridad: el navegador no decide validez, sesión, nombre ni duplicados.
-- Los estudiantes nunca acceden a Supabase; `anon` no tiene acceso a ninguna tabla.
-- `service_role` solo existe en módulos `server-only` (el build falla si se importa desde el cliente).
-- Las invariantes críticas también se imponen en la base de datos (unicidad, sesiones que no se
-  reabren, sin check-ins fuera de una sesión activa, auditoría de solo inserción).
+### Environment variables
 
-## Grupos: Design Team y Rowing & Construction
+| Variable | Required | Visibility | Purpose |
+|---|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Yes | Public | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Yes | Public | Publishable (anon) key, used by the admin session client |
+| `SUPABASE_SERVICE_ROLE_KEY` | Yes | **Secret** | Server-only client for the public check-in path |
+| `SERVER_SECRET` | Yes | **Secret** | Master secret (≥ 32 chars) for QR, ticket, IP-hash and device keys |
+| `QR_GRACE_MS` | No | Server | Grace period after each 10 s QR slot (0–15000, default 5000) |
+| `TICKET_TTL_SECONDS` | No | Server | Check-in ticket lifetime (60–600, default 180) |
 
-- Cada miembro tiene la casilla **Design Team** (`members.is_design_team`, apagada por defecto).
-- Cada sesión se crea con **Required**, dos casillas que se pueden marcar **a la vez**: *Design Team* (dirigida a los miembros del Design Team) y
-  *Rowing & Construction* (dirigida al grupo general, es decir, a los miembros que no son del Design Team). Con una sola casilla la sesión va a ese
-  grupo; con las dos, a **todos** los miembros. Se guarda en `sessions.audience` (enum `design_team` | `remar_construction` | `both`; el identificador
-  `remar_construction` se conserva por compatibilidad, la etiqueta visible es «Rowing & Construction»). Requiere las migraciones 14 y 15.
-- El porcentaje de asistencia de cada miembro cuenta las reuniones cerradas de **su** grupo y las dirigidas a los dos; una reunión del otro grupo no cuenta (aunque asista).
-  La regla vive en las vistas de la base de datos (`session_attendance.for_member`). El denominador de la asistencia en vivo («12 / 25») son los
-  miembros activos del grupo de la sesión.
-- El ASCE ID son **solo números** (validado en el navegador y en el servidor).
+Server variables are validated with Zod at first use; error messages name the variable but never print its value.
+
+## Project status
+
+- ✅ Members, sessions, rotating-QR check-in, "Remember me", team audiences, attendance history, percentages and manual corrections.
+- ✅ Validated against a real Supabase project, with end-to-end tests on desktop, iPhone and Android device profiles.
+- 🚧 Not yet deployed. Remaining work is infrastructure: Vercel deployment, production environment variables and a daily keep-alive for
+  the Supabase free tier.
+
+## Roadmap
+
+Attendance is the first module of a broader platform for managing the team's project. The following modules are
+**planned and not yet implemented**:
+
+| Module | Status |
+|---|---|
+| Documentation management | 🗓️ Planned |
+| Project document organization (uploads, categories) | 🗓️ Planned |
+| Project progress tracking | 🗓️ Planned |
+| Task assignment | 🗓️ Planned |
+| Task completion tracking (completion percentages) | 🗓️ Planned |
+| Time allocation / tracking | 🗓️ Planned |
+| Additional team management tools | 🗓️ Planned |
