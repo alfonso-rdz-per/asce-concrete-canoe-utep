@@ -104,16 +104,17 @@ test("1. New Session pide SOLO Session Name + Required (activado); 'Start check-
   await expect(page).toHaveURL(/\/admin\/sessions\/new$/);
   await expect(page.getByRole("heading", { level: 1, name: "New session" })).toBeVisible();
 
-  // Solo dos controles: el nombre y "Required" con DOS casillas que se pueden marcar a la vez (por defecto solo Rowing & Construction).
+  // Name and one of three session types; Rowing & Construction is selected initially.
   await expect(page.getByLabel("Session Name")).toBeVisible();
-  const group = page.getByRole("group", { name: "Required" });
-  await expect(group.getByRole("checkbox")).toHaveCount(2);
-  await expect(group.getByRole("radio")).toHaveCount(0);
-  await expect(group.getByRole("checkbox", { name: "Design Team" })).not.toBeChecked();
-  await expect(group.getByRole("checkbox", { name: "Rowing & Construction" })).toBeChecked();
+  const group = page.getByRole("group", { name: "Session type" });
+  await expect(group.getByRole("radio")).toHaveCount(3);
+  await expect(group.getByRole("checkbox")).toHaveCount(0);
+  await expect(group.getByRole("radio", { name: "Design Team" })).not.toBeChecked();
+  await expect(group.getByRole("radio", { name: "Rowing & Construction" })).toBeChecked();
+  await expect(group.getByRole("radio", { name: "Optional" })).not.toBeChecked();
   await expect(page.getByRole("switch")).toHaveCount(0);
   for (const label of [/description/i, /location/i, /schedul/i, /date/i, /time/i]) await expect(page.getByLabel(label)).toHaveCount(0);
-  // Sin borradores: un solo botón; y "Required" es un grupo limpio (sin tarjeta alrededor del grupo).
+  // One start button; no draft flow.
   await expect(page.getByRole("button", { name: /draft/i })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Start check-in" })).toHaveCount(1);
   const fieldsetStyle = await group.evaluate((el) => {
@@ -121,13 +122,13 @@ test("1. New Session pide SOLO Session Name + Required (activado); 'Start check-
     return { width: cs.borderTopWidth, bg: cs.backgroundColor };
   });
   expect(fieldsetStyle).toEqual({ width: "0px", bg: "rgba(0, 0, 0, 0)" });
-  await group.getByRole("checkbox", { name: "Design Team" }).check(); // se pueden marcar LAS DOS a la vez…
-  await expect(group.getByRole("checkbox", { name: "Rowing & Construction" })).toBeChecked();
-  await expect(group.getByRole("checkbox", { name: "Design Team" })).toBeChecked();
-  await group.getByRole("checkbox", { name: "Design Team" }).uncheck(); // …y volver a una sola
-  await expect(group.getByRole("checkbox", { name: "Design Team" })).not.toBeChecked();
-  await expect(group.getByRole("checkbox", { name: "Rowing & Construction" })).toBeChecked();
-  expect(await page.locator("main input:not([type=hidden]), main textarea, main select").count()).toBe(3); // nombre + 2 casillas
+  await group.getByRole("radio", { name: "Design Team" }).check();
+  await expect(group.getByRole("radio", { name: "Rowing & Construction" })).not.toBeChecked();
+  await group.getByRole("radio", { name: "Optional" }).check();
+  await expect(group.getByRole("radio", { name: "Design Team" })).not.toBeChecked();
+  await group.getByRole("radio", { name: "Rowing & Construction" }).check();
+  await expect(group.getByRole("radio", { name: "Optional" })).not.toBeChecked();
+  expect(await page.locator("main input:not([type=hidden]), main textarea, main select").count()).toBe(4);
   expect(await page.locator("main").innerText()).not.toMatch(/location|description|GPS/i);
   await expectNoAxeViolations(page, "new session");
 
@@ -435,10 +436,8 @@ async function startSessionViaUi(page: Page, title: string, audience?: "Design T
   await page.goto("/admin/sessions/new");
   await page.getByLabel("Session Name").fill(title);
   if (audience) {
-    // Por defecto solo está marcada Rowing & Construction: se deja marcada únicamente la casilla pedida.
-    const other = audience === "Design Team" ? "Rowing & Construction" : "Design Team";
-    await page.getByRole("checkbox", { name: audience }).check();
-    await page.getByRole("checkbox", { name: other }).uncheck();
+    // Native radios keep exactly one session type selected.
+    await page.getByRole("radio", { name: audience }).check();
   }
   await page.getByRole("button", { name: "Start check-in" }).click();
   await page.waitForURL(/\/admin\/sessions\/[0-9a-f-]{36}\/qr$/);

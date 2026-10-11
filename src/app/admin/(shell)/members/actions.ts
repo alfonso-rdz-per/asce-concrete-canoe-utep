@@ -1,11 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import type { ActionState } from "@/lib/action-state";
 import { requireAdmin } from "@/lib/auth/session";
 import { isAttendanceStatus, statusLabel } from "@/lib/attendance";
 import { setMemberAttendance } from "@/lib/data/attendance";
-import { createMember, setMemberActive, updateMember } from "@/lib/data/members";
+import { createMember, deleteInactiveMember, setMemberActive, updateMember } from "@/lib/data/members";
 import { todayInElPaso } from "@/lib/dates";
 import { NOT_FOUND_ATTENDANCE, NOT_FOUND_MEMBER, type UserFacingError } from "@/lib/errors";
 import { idSchema, parseMemberForm, type MemberField } from "@/lib/validation/member";
@@ -95,6 +96,16 @@ export async function setMemberActiveAction(_prev: ActionState, formData: FormDa
   revalidatePath("/admin/members");
   revalidatePath(`/admin/members/${id}/edit`);
   return { status: "success", message: `${result.data.name} was ${active ? "reactivated" : "deactivated"}.` };
+}
+
+export async function deleteMemberAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const { supabase } = await requireAdmin();
+  const id = memberId(formData);
+  if (!id) return { status: "error", message: NOT_FOUND_MEMBER };
+  const result = await deleteInactiveMember(supabase, id);
+  if (!result.ok) return { status: "error", message: result.error.message };
+  revalidatePath("/admin", "layout");
+  redirect("/admin/members");
 }
 
 /**

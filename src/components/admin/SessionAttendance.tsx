@@ -11,7 +11,7 @@ type Action = (prev: ActionState, formData: FormData) => Promise<ActionState>;
 /**
  * Asistencia de UNA reunión CERRADA: presentes / esperados / porcentaje y el roster de los miembros esperados con Present / Absent.
  * Los números y la lista vienen de la base de datos (no se calculan aquí): tras una corrección, la acción revalida la página y todo se actualiza.
- * Solo se pintan los miembros esperados, así que desde la interfaz no se puede elegir a alguien de otro grupo ni fuera de la población de la reunión.
+ * Expected members can be corrected; present guests are listed separately.
  * La corrección no borra nada: queda en `attendance_overrides`, se conserva el check-in original y se audita en `audit_log`.
  */
 export function SessionAttendance({
@@ -19,12 +19,16 @@ export function SessionAttendance({
   sessionTitle,
   summary,
   roster,
+  extras = [],
+  optional = false,
   action,
 }: {
   sessionId: string;
   sessionTitle: string;
   summary: MeetingSummary;
   roster: RosterRow[];
+  extras?: RosterRow[];
+  optional?: boolean;
   action: Action;
 }) {
   return (
@@ -41,6 +45,7 @@ export function SessionAttendance({
         </p>
       </div>
 
+      {optional ? <p className="mb-4 text-sm text-muted">Optional meeting: this attendance does not affect member attendance percentages.</p> : null}
       {roster.length === 0 ? (
         <p className="text-muted">No members were expected at this meeting.</p>
       ) : (
@@ -55,6 +60,20 @@ export function SessionAttendance({
           </ul>
         </>
       )}
+      {extras.length > 0 ? (
+        <section className="mt-6" aria-label="Extra attendees">
+          <h3 className="text-lg font-bold text-navy">{extras.length} extra {extras.length === 1 ? "attendee" : "attendees"}</h3>
+          <p className="text-sm text-muted">These attendees are outside the expected group and do not count toward this meeting’s attendance rate.</p>
+          <ul className="divide-y divide-line">
+            {extras.map((row) => (
+              <li key={row.memberId} className="py-3">
+                <p className="break-words font-semibold text-ink">{row.name}</p>
+                <p className="break-words text-sm text-muted">{row.asceId} · {row.position}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
     </div>
   );
 }

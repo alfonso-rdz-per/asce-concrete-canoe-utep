@@ -1,13 +1,24 @@
 "use client";
 
 import { CheckCircle2, Clock, MapPin, TriangleAlert } from "lucide-react";
-import { useActionState, useEffect, useRef, useState, useTransition } from "react";
+import { useActionState, useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { Alert, Card } from "@/components/ui/Display";
 import { CheckboxField, TextField } from "@/components/ui/Fields";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import { CHECKIN_IDLE, type CheckInState } from "@/lib/checkin/state";
 import { formatClockTime } from "@/lib/dates";
 import { INSTAGRAM_HANDLE, INSTAGRAM_URL } from "@/lib/brand/social";
+
+/**
+ * Conserva el flujo inicial durante los re-renders de las acciones que escriben cookies.
+ * El QR ya canjeado puede caducar sin desmontar el panel ni perder su resultado.
+ * La página usa el token QR como key: otro QR inicia otro flujo. El ticket original
+ * y su vencimiento se conservan; el servidor sigue validándolo en cada envío.
+ */
+export function CheckInFlow({ children }: { children: ReactNode }) {
+  const [initialContent] = useState(() => children);
+  return initialContent;
+}
 
 /**
  * Lo que ve el estudiante tras escanear un QR VÁLIDO: confirma el QR y pide ASCE ID + Name (solo el nombre, sin apellido).

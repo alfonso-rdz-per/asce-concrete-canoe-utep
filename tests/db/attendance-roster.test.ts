@@ -12,7 +12,7 @@ const TODAY = "(now() at time zone 'America/Denver')::date";
 let seq = 0;
 
 async function closedSession(db: TestDb, audience: "design_team" | "remar_construction", present: string[] = []): Promise<string> {
-  const id = (await db.query<{ id: string }>("insert into public.sessions (title, scheduled_at, audience) values ($1, now(), $2) returning id", [`Reunión ${++seq}`, audience])).rows[0].id;
+  const id = (await db.query<{ id: string }>("insert into public.sessions (title, scheduled_at, audience, attendance_rule_version) values ($1, now(), $2, 1) returning id", [`Reunión ${++seq}`, audience])).rows[0].id;
   await db.query("update public.sessions set status = 'active' where id = $1", [id]);
   for (const m of present) await db.query("insert into public.checkins (session_id, member_id, token_slot, ticket_nonce) values ($1, $2, 1, $3)", [id, m, nonce(`ros${++seq}`)]);
   await db.closeSession(id);

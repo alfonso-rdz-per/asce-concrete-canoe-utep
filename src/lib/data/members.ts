@@ -84,3 +84,11 @@ export async function setMemberActive(sb: SupabaseClient, id: string, active: bo
   if (!data || data.length === 0) return fail({ message: NOT_FOUND_MEMBER });
   return { ok: true, data: data[0] as unknown as Member };
 }
+
+/** The database atomically rejects active profiles and cascades related records. */
+export async function deleteInactiveMember(sb: SupabaseClient, id: string): Promise<Result<{ id: string }>> {
+  const { data, error } = await sb.from("members").delete().eq("id", id).select("id");
+  if (error) return fail(describeDbError(error));
+  if (!data || data.length === 0) return fail({ message: NOT_FOUND_MEMBER });
+  return { ok: true, data: { id: data[0].id } };
+}

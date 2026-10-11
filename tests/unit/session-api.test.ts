@@ -32,6 +32,7 @@ function fakeSupabase(data: {
   sessionError?: { code: string; message: string };
   checkins?: unknown[];
   activeMembers?: number;
+  designMembers?: number;
 }) {
   const calls: Call[] = [];
   class Query {
@@ -59,7 +60,7 @@ function fakeSupabase(data: {
     private result() {
       if (this.table === "sessions") return { data: data.session ?? null, error: data.sessionError ?? null };
       if (this.table === "checkins") return { data: data.checkins ?? [], error: null };
-      if (this.table === "members") return { data: null, count: data.activeMembers ?? 0, error: null };
+      if (this.table === "members") return { data: null, count: this.call.ops.some(([name, args]) => name === "eq" && args[0] === "is_design_team" && args[1] === true) ? (data.designMembers ?? data.activeMembers ?? 0) : (data.activeMembers ?? 0), error: null };
       return { data: null, error: { code: "42P01", message: "unexpected table" } };
     }
     maybeSingle() {
@@ -85,7 +86,8 @@ const sessionRow = (over: Record<string, unknown> = {}) => ({
   location: "Construction Workshop",
   scheduled_at: "2026-09-20T00:00:00Z",
   status: "active",
-  required: true,
+  audience: "remar_construction",
+  attendance_rule_version: 1,
   opened_at: "2026-09-20T00:01:00Z",
   closed_at: null,
   created_at: "2026-09-19T00:00:00Z",
@@ -184,7 +186,27 @@ describe("GET /api/admin/sessions/[id]/qr", () => {
 });
 
 describe("GET /api/admin/sessions/[id]/attendance", () => {
-  const checkin = (id: string, name: string, position: string, at: string) => ({ id, checked_in_at: at, members: { name, position } });
+  it("counts Design members only while retaining guest check-ins in the live list", async () => {
+    asAdmin(fakeSupabase({
+      session: sessionRow({ audience: "design_team", attendance_rule_version: 2 }),
+      activeMembers: 5,
+      designMembers: 10,
+      checkins: [
+        { id: "design", checked_in_at: new Date(T0).toISOString(), members: { name: "Design member", position: "Member", is_design_team: true } },
+        { id: "guest", checked_in_at: new Date(T0).toISOString(), members: { name: "Guest", position: "Member", is_design_team: false } },
+      ],
+    }).sb);
+    const body = await (await getAttendance(req, ctx(SESSION_A))).json();
+    expect(body).toMatchObject({ count: 1, total: 10 });
+    expect(body.attendees).toHaveLength(2);
+    expect(JSON.stringify(body)).not.toContain("is_design_team");
+  });
+  it.each(["remar_construction", "optional"])("%s expects all active members, including Design", async (audience) => {
+    asAdmin(fakeSupabase({ session: sessionRow({ audience, attendance_rule_version: 2 }), activeMembers: 5, designMembers: 10 }).sb);
+    const body = await (await getAttendance(req, ctx(SESSION_A))).json();
+    expect(body.total).toBe(15);
+  });
+  const checkin = (id: string, name: string, position: string, at: string) => ({ id, checked_in_at: at, members: { name, position, is_design_team: false } });
 
   it("SIN ADMINISTRADOR (p. ej. un usuario que no lo es o un estudiante): 401 y NINGUNA consulta", async () => {
     getAdminMock.mockResolvedValue(null);

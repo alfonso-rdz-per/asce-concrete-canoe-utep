@@ -3,19 +3,13 @@
 import Link from "next/link";
 import { useActionState, useEffect, useRef } from "react";
 import { Alert } from "@/components/ui/Display";
-import { CheckboxGroupField, TextField } from "@/components/ui/Fields";
+import { RadioGroupField, TextField } from "@/components/ui/Fields";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import { IDLE, type ActionState } from "@/lib/action-state";
-import { AUDIENCE_LABEL, DEFAULT_AUDIENCE, groupsFromAudience, isTeamGroup, TEAM_GROUPS } from "@/lib/session-audience";
+import { AUDIENCE_LABEL, DEFAULT_AUDIENCE, isSelectableAudience, SELECTABLE_AUDIENCES } from "@/lib/session-audience";
 import { TITLE_MAX } from "@/lib/validation/session";
 
-/**
- * Formulario de nueva sesión: SOLO el nombre y "Required": a qué equipo(s) va dirigida. Son dos casillas (Design Team y Rowing & Construction)
- * que se pueden marcar las dos a la vez; por defecto llega marcada Rowing & Construction. No pide descripción,
- * ubicación ni fecha/hora: la fecha la pone el servidor y quién/cuándo empezó lo fija la base de datos. Un solo botón,
- * "Start check-in": crea la sesión ya activa y lleva a la pantalla del QR (no hay borradores). Si ya hay un check-in en curso no
- * se ofrece abrir otro (la base de datos lo impide de todos modos): se explica y se enlaza a su pantalla del QR.
- */
+/** Start a session with a name and one type; an active session blocks another start. */
 export function SessionForm({
   action,
   activeSession,
@@ -33,8 +27,8 @@ export function SessionForm({
 
   const errors = state.status === "error" ? (state.fieldErrors ?? {}) : {};
   const values = state.status === "error" ? (state.values ?? {}) : {};
-  // Tras un error se repintan las casillas tal como se enviaron (aunque no hubiera ninguna); al abrir el formulario, la de por defecto.
-  const checkedGroups = typeof values.audience === "string" ? values.audience.split(",").filter(isTeamGroup) : groupsFromAudience(DEFAULT_AUDIENCE);
+  // Restore the single selected audience after a validation error.
+  const selectedAudience = isSelectableAudience(values.audience) ? values.audience : DEFAULT_AUDIENCE;
 
   return (
     <form ref={formRef} action={formAction} noValidate className="space-y-5">
@@ -59,11 +53,11 @@ export function SessionForm({
         placeholder="Concrete Canoe Practice"
         autoComplete="off"
       />
-      <CheckboxGroupField
-        legend="Required"
+      <RadioGroupField
+        legend="Session type"
         name="audience"
-        options={TEAM_GROUPS.map((value) => ({ value, label: AUDIENCE_LABEL[value] }))}
-        defaultValues={checkedGroups}
+        options={SELECTABLE_AUDIENCES.map((value) => ({ value, label: AUDIENCE_LABEL[value] }))}
+        defaultValue={selectedAudience}
         error={errors.audience}
       />
 

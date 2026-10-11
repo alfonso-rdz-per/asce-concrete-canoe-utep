@@ -2,7 +2,7 @@ import { ArrowLeft } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { setAttendanceAction, setMemberActiveAction, updateMemberAction } from "@/app/admin/(shell)/members/actions";
+import { deleteMemberAction, setAttendanceAction, setMemberActiveAction, updateMemberAction } from "@/app/admin/(shell)/members/actions";
 import { AttendanceHistory } from "@/components/admin/AttendanceHistory";
 import { MemberForm } from "@/components/admin/MemberForm";
 import { MemberStatusControl } from "@/components/admin/MemberControls";
@@ -100,7 +100,7 @@ export default async function EditMemberPage({ params }: { params: Promise<{ id:
           <h2 id="status-heading" className="text-lg font-bold text-navy">
             Status
           </h2>
-          <MemberStatusControl memberId={member.id} memberName={member.name} active={member.active} action={setMemberActiveAction} />
+          <MemberStatusControl memberId={member.id} memberName={member.name} active={member.active} action={setMemberActiveAction} deleteAction={deleteMemberAction} />
         </section>
       </Card>
     </>

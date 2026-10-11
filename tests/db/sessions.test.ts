@@ -58,7 +58,7 @@ describe("Sesiones, QR y asistencia en vivo (Fase 4)", () => {
         "select column_name, data_type from information_schema.columns where table_schema = 'public' and table_name = 'sessions' order by ordinal_position",
       );
       expect(cols.rows.map((c) => c.column_name)).toEqual([
-        "id", "title", "description", "scheduled_at", "status", "opened_at", "closed_at", "opened_by", "created_by", "created_at", "location", "audience",
+        "id", "title", "description", "scheduled_at", "status", "opened_at", "closed_at", "opened_by", "created_by", "created_at", "location", "audience", "attendance_rule_version",
       ]);
       expect(cols.rows.find((c) => c.column_name === "location")?.data_type).toBe("text");
     });

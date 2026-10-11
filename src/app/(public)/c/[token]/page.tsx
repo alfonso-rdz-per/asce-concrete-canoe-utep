@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { BrandMark } from "@/components/brand/BrandMark";
 import { CanoeBand, HeroBackdrop } from "@/components/brand/Hero";
 import { WaveDivider } from "@/components/brand/Shapes";
-import { CheckInPanel } from "@/components/checkin/CheckInPanel";
+import { CheckInFlow, CheckInPanel } from "@/components/checkin/CheckInPanel";
 import { Card } from "@/components/ui/Display";
 import { lookupRememberedMember, redeemQrOnServer } from "@/lib/checkin/server";
 import { DEVICE_COOKIE } from "@/lib/device-token";
@@ -61,28 +61,30 @@ export default async function CheckInLandingPage({ params }: { params: Promise<{
         </header>
 
         <main id="main" tabIndex={-1} className="mx-auto flex w-full max-w-6xl flex-1 flex-col items-center justify-center px-4 pb-10 pt-4 sm:px-6">
-          {outcome.ok ? (
-            <CheckInPanel
-              ticket={outcome.ticket}
-              title={outcome.session.title}
-              location={outcome.session.location}
-              expiresAtMs={outcome.expiresAtMs}
-              ticketMinutes={Math.round(serverEnv().TICKET_TTL_SECONDS / 60)}
-              remembered={remembered}
-              action={checkInAction}
-              switchAction={switchMemberAction}
-            />
-          ) : failure ? (
-            <Card className="w-full max-w-md p-6 text-ink sm:p-8">
-              <div role="alert" className="text-center">
-                <div aria-hidden="true" className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-mist text-blue">
-                  <failure.icon className="h-9 w-9" />
+          <CheckInFlow key={token}>
+            {outcome.ok ? (
+              <CheckInPanel
+                ticket={outcome.ticket}
+                title={outcome.session.title}
+                location={outcome.session.location}
+                expiresAtMs={outcome.expiresAtMs}
+                ticketMinutes={Math.round(serverEnv().TICKET_TTL_SECONDS / 60)}
+                remembered={remembered}
+                action={checkInAction}
+                switchAction={switchMemberAction}
+              />
+            ) : failure ? (
+              <Card className="w-full max-w-md p-6 text-ink sm:p-8">
+                <div role="alert" className="text-center">
+                  <div aria-hidden="true" className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-mist text-blue">
+                    <failure.icon className="h-9 w-9" />
+                  </div>
+                  <h1 className="mt-4 text-2xl font-bold text-navy">{failure.title}</h1>
+                  <p className="mt-2 text-muted">{failure.text}</p>
                 </div>
-                <h1 className="mt-4 text-2xl font-bold text-navy">{failure.title}</h1>
-                <p className="mt-2 text-muted">{failure.text}</p>
-              </div>
-            </Card>
-          ) : null}
+              </Card>
+            ) : null}
+          </CheckInFlow>
         </main>
 
         <WaveDivider />

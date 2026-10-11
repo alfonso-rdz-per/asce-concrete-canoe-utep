@@ -1,4 +1,4 @@
-import { AUDIENCE_LABEL, audienceFromGroups, DEFAULT_AUDIENCE, groupsFromAudience, isForMember, SESSION_AUDIENCES, TEAM_GROUPS } from "@/lib/session-audience";
+import { AUDIENCE_LABEL, DEFAULT_AUDIENCE, isForMember, SELECTABLE_AUDIENCES } from "@/lib/session-audience";
 import { describe, expect, it, vi } from "vitest";
 import { elPasoLocalToIso, formatDateDotTime, toElPasoLocal } from "@/lib/dates";
 import { describeDbError } from "@/lib/errors";
@@ -18,7 +18,7 @@ const formMulti = (title: string, audiences: string[]) => {
   return fd;
 };
 
-const AUDIENCE_ERROR = "Choose a valid team: Design Team or Rowing & Construction.";
+const AUDIENCE_ERROR = "Choose one option: Rowing & Construction, Design Team or Optional.";
 
 describe("hora de El Paso <-> instante UTC (con horario de verano)", () => {
   it("septiembre (MDT, UTC-6) y enero (MST, UTC-7)", () => {
@@ -61,87 +61,35 @@ describe("Session Name", () => {
   });
 });
 
-describe("New Session: solo Session Name + Required (Design Team y/o Rowing & Construction)", () => {
-  it("con el nombre y el grupo basta: sin descripción, ubicación, fecha ni hora", () => {
-    expect(parseSessionForm(form({ title: "Concrete Canoe Practice", audience: "remar_construction" }))).toEqual({
-      ok: true,
-      data: { title: "Concrete Canoe Practice", audience: "remar_construction" },
-    });
-  });
-
-  it("REQUIRED ya no es un booleano: dos equipos (Design Team y Rowing & Construction) que se pueden elegir por separado o los dos a la vez", () => {
-    expect(TEAM_GROUPS).toEqual(["design_team", "remar_construction"]);
-    expect(SESSION_AUDIENCES).toEqual(["design_team", "remar_construction", "both"]);
-    expect(AUDIENCE_LABEL).toEqual({ design_team: "Design Team", remar_construction: "Rowing & Construction", both: "Both teams" });
+describe("New Session: one audience", () => {
+  it("offers three English options and defaults to Rowing", () => {
+    expect(SELECTABLE_AUDIENCES).toEqual(["remar_construction", "design_team", "optional"]);
     expect(DEFAULT_AUDIENCE).toBe("remar_construction");
-    expect(parseSessionForm(form({ title: "Practice", audience: "design_team" }))).toMatchObject({ ok: true, data: { audience: "design_team" } });
-    expect(parseSessionForm(form({ title: "Practice", audience: "remar_construction" }))).toMatchObject({ ok: true, data: { audience: "remar_construction" } });
+    expect(AUDIENCE_LABEL.optional).toBe("Optional");
+    expect(AUDIENCE_LABEL.both).toBe("Rowing & Construction");
   });
-
-  it("MARCAR LAS DOS casillas guarda la audiencia \"both\" (en cualquier orden; un valor repetido no cambia nada)", () => {
-    expect(parseSessionForm(formMulti("Practice", ["design_team", "remar_construction"]))).toEqual({ ok: true, data: { title: "Practice", audience: "both" } });
-    expect(parseSessionForm(formMulti("Practice", ["remar_construction", "design_team"]))).toMatchObject({ ok: true, data: { audience: "both" } });
-    expect(parseSessionForm(formMulti("Practice", ["design_team", "design_team"]))).toMatchObject({ ok: true, data: { audience: "design_team" } });
+  it.each(SELECTABLE_AUDIENCES)("accepts %s", (audience) => {
+    expect(parseSessionForm(form({ title: "Practice", audience }))).toEqual({ ok: true, data: { title: "Practice", audience } });
   });
-
-  it("casillas <-> audiencia: audienceFromGroups y groupsFromAudience son inversas", () => {
-    expect(audienceFromGroups(new Set(["design_team"]))).toBe("design_team");
-    expect(audienceFromGroups(new Set(["remar_construction"]))).toBe("remar_construction");
-    expect(audienceFromGroups(new Set(["design_team", "remar_construction"]))).toBe("both");
-    expect(audienceFromGroups(new Set())).toBeNull();
-    for (const audience of SESSION_AUDIENCES) expect(audienceFromGroups(new Set(groupsFromAudience(audience)))).toBe(audience);
-  });
-
-  it("un valor que no sea una de las dos casillas se RECHAZA en el servidor (incluidos los booleanos antiguos y \"both\" enviado a mano)", () => {
-    for (const bad of ["on", "true", "false", "required", "optional", "Design Team", "DESIGN_TEAM", "design-team", "everyone", "both", " design_team"]) {
-      expect(parseSessionForm(form({ title: "Practice", audience: bad })), JSON.stringify(bad)).toEqual({
-        ok: false,
-        fieldErrors: { audience: AUDIENCE_ERROR },
-      });
+  it("rejects missing, duplicated, multiple and manipulated choices", () => {
+    for (const audiences of [[], [""], ["both"], ["on"], ["Design Team"], ["design_team", "optional"], ["design_team", "design_team"]]) {
+      expect(parseSessionForm(formMulti("Practice", audiences))).toEqual({ ok: false, fieldErrors: { audience: AUDIENCE_ERROR } });
     }
-    // Un valor válido acompañado de uno inválido tampoco pasa.
-    expect(parseSessionForm(formMulti("Practice", ["design_team", "everyone"]))).toEqual({ ok: false, fieldErrors: { audience: AUDIENCE_ERROR } });
   });
-
-  it("NO es obligatorio marcar ninguna casilla: sin ninguna marcada (o el campo ausente), cae al valor por defecto (remar_construction) sin error", () => {
-    expect(parseSessionForm(form({ title: "Practice" }))).toEqual({ ok: true, data: { title: "Practice", audience: DEFAULT_AUDIENCE } });
-    expect(parseSessionForm(formMulti("Practice", []))).toEqual({ ok: true, data: { title: "Practice", audience: DEFAULT_AUDIENCE } });
-    expect(parseSessionForm(form({ title: "Practice", audience: "" }))).toEqual({ ok: false, fieldErrors: { audience: AUDIENCE_ERROR } }); // "" enviado a mano no es "ninguna casilla"
-    // El campo antiguo 'required' ya no significa nada.
-    expect(parseSessionForm(form({ title: "Practice", required: "on" }))).toMatchObject({ ok: true });
-  });
-
-  it("la regla de grupo: Design Team <-> miembros del Design Team; Rowing & Construction <-> el resto; Both teams <-> todos", () => {
+  it("expects everyone for Rowing and Optional, only design for Design Team", () => {
+    for (const audience of ["remar_construction", "optional", "both"] as const) {
+      expect(isForMember(audience, true)).toBe(true);
+      expect(isForMember(audience, false)).toBe(true);
+    }
     expect(isForMember("design_team", true)).toBe(true);
     expect(isForMember("design_team", false)).toBe(false);
-    expect(isForMember("remar_construction", false)).toBe(true);
-    expect(isForMember("remar_construction", true)).toBe(false);
-    expect(isForMember("both", true)).toBe(true);
-    expect(isForMember("both", false)).toBe(true);
+    expect(isForMember("remar_construction", true, 1)).toBe(false);
   });
-
-  it("el nombre es obligatorio: sin él, error en inglés sobre ese campo", () => {
+  it("requires a title and ignores protected or obsolete fields", () => {
     expect(parseSessionForm(form({ title: "  ", audience: "design_team" }))).toEqual({ ok: false, fieldErrors: { title: "Enter a session name." } });
-    expect(parseSessionForm(new FormData()).ok).toBe(false);
+    expect(parseSessionForm(form({ title: "Practice", audience: "optional", description: "x", location: "Lab", scheduledAt: "2001-01-01", status: "closed", attendance_rule_version: "1", intent: "draft", required: "on" }))).toEqual({ ok: true, data: { title: "Practice", audience: "optional" } });
   });
-
-  it("IGNORA descripción, ubicación, fecha, estado, quién/cuándo empezó y cualquier otro campo (un POST manipulado no cambia nada)", () => {
-    const r = parseSessionForm(
-      form({ title: "Practice", audience: "design_team", description: "x", location: "Lab", scheduledAt: "2001-01-01T00:00", status: "closed", opened_by: "x", opened_at: "2020-01-01", pin: "123456" }),
-    );
-    expect(r.ok).toBe(true);
-    if (r.ok) expect(Object.keys(r.data).sort()).toEqual(["audience", "title"]);
-  });
-
-  it("ya no hay 'intent' ni borradores: aunque un POST manipulado lo envíe, se ignora y la sesión siempre se crea activa", () => {
-    for (const intent of ["start", "draft", "activate", ""]) {
-      const r = parseSessionForm(form({ title: "P", audience: "design_team", intent }));
-      expect(r, intent).toMatchObject({ ok: true });
-      if (r.ok) expect(r.data).not.toHaveProperty("intent");
-    }
-  });
-
-  it("un campo de tipo archivo cuenta como vacío (no lanza)", () => {
+  it("rejects files without throwing", () => {
     const fd = new FormData();
     fd.set("title", new File(["x"], "x.txt"));
     expect(parseSessionForm(fd).ok).toBe(false);

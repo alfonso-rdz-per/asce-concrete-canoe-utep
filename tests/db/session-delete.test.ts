@@ -125,9 +125,9 @@ describe("Eliminar sesiones", () => {
     expect(await count("select count(*) as n from public.attendance_overrides where session_id = $1", [id])).toBe(1);
   });
 
-  it("borrar un miembro con asistencias sigue prohibido (el historial de miembros no se toca)", async () => {
+  it("borrar un miembro activo con asistencias sigue prohibido", async () => {
     const { members } = await sessionWithRecords({ n: 1 });
-    await expect(db.query("delete from public.members where id = $1", [members[0]])).rejects.toMatchObject({ code: "23503" });
+    await expect(db.query("delete from public.members where id = $1", [members[0]])).rejects.toMatchObject({ code: "P0001" });
   });
 
   it("borrar dos sesiones no afecta a las demás", async () => {

@@ -143,7 +143,7 @@ export async function setMemberAttendance(
 // Attendance (reuniones CERRADAS): historial y detalle con roster
 // ---------------------------------------------------------------------------------------------------------------------------------
 // Fuente de verdad: la base de datos. `session_attendance_summary` da presentes / esperados / porcentaje de cada reunión CERRADA y
-// `session_attendance.counts_toward_rate` marca quién estaba esperado en ella (la MISMA marca que alimenta el porcentaje individual). Aquí no se
+// `session_attendance.is_expected` marca quién estaba esperado en ella; Optional no cuenta para porcentajes individuales. Aquí no se
 // reconstruye ninguna regla de pertenencia: ni "activo hoy", ni fechas de ingreso/baja, ni grupo. Una reunión ACTIVA no pasa por aquí (su conteo en
 // vivo sale de getSessionLive): el resumen la trata como "aún no cuenta".
 
@@ -176,10 +176,13 @@ function chunk<T>(items: T[], size: number): T[][] {
   return out;
 }
 
-/** Reuniones CERRADAS (las más recientes primero), opcionalmente de un solo equipo (incluye las dirigidas a los dos), con presentes / esperados / porcentaje. */
+/** Closed meetings by category; historical "both" belongs to Rowing & Construction. */
 export async function listClosedMeetings(sb: SupabaseClient, group: AttendanceGroup): Promise<Result<{ meetings: MeetingRow[]; truncated: boolean }>> {
   let query = sb.from("sessions").select("id, title, audience, opened_at, scheduled_at").eq("status", "closed");
-  if (group !== "all") query = query.in("audience", [group, "both"]);
+  if (group !== "all") {
+    const audiences = group === "other" ? ["optional"] : group === "remar_construction" ? [group, "both"] : [group];
+    query = query.in("audience", audiences);
+  }
   const sessions = await query.order("opened_at", { ascending: false }).limit(MEETING_LIST_LIMIT);
   if (sessions.error) return fail(describeDbError(sessions.error));
 
@@ -202,32 +205,33 @@ export async function listClosedMeetings(sb: SupabaseClient, group: AttendanceGr
 
 export interface SessionAttendanceDetail {
   summary: MeetingSummary;
-  /** Solo la población esperada de esa reunión (filas con `counts_toward_rate`), por nombre. */
+  /** Solo la población esperada de esa reunión (filas con `is_expected`), por nombre. */
   roster: RosterRow[];
+  extras: RosterRow[];
 }
 
-/**
- * Detalle de una reunión CERRADA: el resumen y el roster de los miembros esperados. El roster NO se reconstruye con `members.active` ni con
- * fechas: se pide a la base de datos exactamente las filas de `session_attendance` con `counts_toward_rate` (un miembro de otro grupo, o que no
- * pertenecía al equipo ese día y no asistió, no aparece y por tanto no se puede corregir desde la interfaz).
- */
+/** Closed meeting summary, expected roster and present guests, all decided by SQL. */
 export async function getSessionAttendanceDetail(sb: SupabaseClient, sessionId: string): Promise<Result<SessionAttendanceDetail>> {
-  const [summary, population, members] = await Promise.all([
+  const [summary, population, extraPopulation, members] = await Promise.all([
     sb.from("session_attendance_summary").select(SUMMARY_COLUMNS).eq("session_id", sessionId).maybeSingle(),
-    sb.from("session_attendance").select("member_id, status, source").eq("session_id", sessionId).eq("counts_toward_rate", true).limit(MEMBER_LIST_LIMIT),
+    sb.from("session_attendance").select("member_id, status, source").eq("session_id", sessionId).eq("is_expected", true).limit(MEMBER_LIST_LIMIT),
+    sb.from("session_attendance").select("member_id, status, source").eq("session_id", sessionId).eq("for_member", false).eq("status", "present").limit(MEMBER_LIST_LIMIT),
     listMembers(sb),
   ]);
   if (summary.error) return fail(describeDbError(summary.error));
   if (population.error) return fail(describeDbError(population.error));
+  if (extraPopulation.error) return fail(describeDbError(extraPopulation.error));
   if (!members.ok) return members;
 
   const byId = new Map(members.data.map((m) => [m.id, m]));
-  const roster: RosterRow[] = [];
-  for (const row of (population.data ?? []) as Array<{ member_id: string; status: AttendanceStatus; source: AttendanceSource }>) {
-    const m = byId.get(row.member_id);
-    if (m) roster.push({ memberId: m.id, name: m.name, asceId: m.asce_id, position: m.position, status: row.status, source: row.source });
-  }
-  roster.sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }) || a.asceId.localeCompare(b.asceId));
+  const toRoster = (data: unknown): RosterRow[] => {
+    const result: RosterRow[] = [];
+    for (const row of (data ?? []) as Array<{ member_id: string; status: AttendanceStatus; source: AttendanceSource }>) {
+      const m = byId.get(row.member_id);
+      if (m) result.push({ memberId: m.id, name: m.name, asceId: m.asce_id, position: m.position, status: row.status, source: row.source });
+    }
+    return result.sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }) || a.asceId.localeCompare(b.asceId));
+  };
 
-  return { ok: true, data: { summary: summary.data ? toSummary(summary.data as SummaryDbRow) : EMPTY_SUMMARY, roster } };
+  return { ok: true, data: { summary: summary.data ? toSummary(summary.data as SummaryDbRow) : EMPTY_SUMMARY, roster: toRoster(population.data), extras: toRoster(extraPopulation.data) } };
 }

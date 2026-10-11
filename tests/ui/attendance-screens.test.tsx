@@ -26,8 +26,9 @@ describe("Attendance: filtro por grupo", () => {
       ["All", "/admin/attendance"],
       ["Design Team", "/admin/attendance?group=design_team"],
       ["Rowing & Construction", "/admin/attendance?group=remar_construction"],
+      ["Other", "/admin/attendance?group=other"],
     ]);
-    expect(links.map((l) => l.getAttribute("aria-current"))).toEqual([null, "page", null]);
+    expect(links.map((l) => l.getAttribute("aria-current"))).toEqual([null, "page", null, null]);
   });
 
   it("'All' está activo por defecto y los botones son cómodos al tacto (alto mínimo 44 px)", () => {
@@ -77,6 +78,20 @@ describe("Attendance: historial de reuniones cerradas", () => {
 });
 
 describe("Attendance: detalle de una reunión cerrada (roster)", () => {
+  it("shows 50% for five of ten design members and lists five extras separately", () => {
+    const extras: RosterRow[] = Array.from({ length: 5 }, (_, i) => ({ memberId: `extra-${i}`, name: `Guest ${i}`, asceId: `guest-${i}`, position: "Member", status: "present", source: "check_in" }));
+    render(<SessionAttendance sessionId="design" sessionTitle="Design review" summary={{ present: 5, expected: 10, rate: 50 }} roster={[]} extras={extras} action={idle} />);
+    expect(screen.getByTestId("attendance-summary")).toHaveTextContent("5 / 10 present");
+    expect(screen.getByTestId("attendance-summary")).toHaveTextContent("50%");
+    expect(screen.getByRole("heading", { name: "5 extra attendees" })).toBeInTheDocument();
+    const section = screen.getByRole("region", { name: "Extra attendees" });
+    expect(within(section).getAllByRole("listitem")).toHaveLength(5);
+    expect(within(section).queryByRole("button")).toBeNull();
+  });
+  it("explains that Optional does not affect member attendance percentages", () => {
+    render(<SessionAttendance sessionId="optional" sessionTitle="Optional" summary={{ present: 2, expected: 15, rate: 13 }} roster={[]} optional action={idle} />);
+    expect(screen.getByText(/does not affect member attendance percentages/)).toBeInTheDocument();
+  });
   const summary: MeetingSummary = { present: 2, expected: 3, rate: 67 };
   const roster: RosterRow[] = [
     { memberId: "m-1", name: "Ana Pérez", asceId: "1234567", position: "Safety Officer", status: "present", source: "check_in" },

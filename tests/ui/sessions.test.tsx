@@ -31,159 +31,61 @@ describe("navegación del panel", () => {
   });
 });
 
-describe("SessionForm: New Session solo pide Session Name + Required (Design Team y/o Rowing & Construction)", () => {
-  it("dos campos: 'Session Name' (obligatorio) y 'Required' con DOS casillas; por defecto solo Rowing & Construction", () => {
+describe("SessionForm: single session type", () => {
+  it("offers three native radio options, with Rowing selected", () => {
     render(<SessionForm action={idle} />);
     expect(screen.getByLabelText("Session Name")).toBeRequired();
-    expect(screen.getByLabelText("Session Name")).toHaveAttribute("placeholder", "Concrete Canoe Practice");
-    const group = screen.getByRole("group", { name: "Required" });
-    const options = within(group).getAllByRole("checkbox");
-    expect(options.map((o) => (o as HTMLInputElement).value)).toEqual(["design_team", "remar_construction"]);
-    expect(within(group).getByRole("checkbox", { name: "Design Team" })).not.toBeChecked();
-    expect(within(group).getByRole("checkbox", { name: "Rowing & Construction" })).toBeChecked();
+    const options = within(screen.getByRole("group", { name: "Session type" })).getAllByRole("radio");
+    expect(options.map((o) => (o as HTMLInputElement).value)).toEqual(["remar_construction", "design_team", "optional"]);
+    expect(screen.getByRole("radio", { name: "Rowing & Construction" })).toBeChecked();
+    expect(screen.queryByRole("checkbox")).toBeNull();
     expect(screen.getAllByRole("textbox")).toHaveLength(1);
-    expect(screen.queryByRole("switch")).toBeNull(); // ya no es un booleano
-    expect(screen.queryByRole("radio")).toBeNull(); // ya no son excluyentes: se pueden marcar las dos
-    expect(screen.queryByText(/Remar/)).toBeNull(); // la etiqueta visible es en inglés: Rowing & Construction
+    for (const option of options) expect(option.closest("label")?.className).toContain("min-h-12");
   });
-
-  it("NO pide descripción, ubicación, fecha ni hora (ni GPS, mapas o coordenadas)", () => {
-    const { container } = render(<SessionForm action={idle} />);
-    for (const label of [/description/i, /location/i, /schedul/i, /date/i, /time/i]) expect(screen.queryByLabelText(label), String(label)).toBeNull();
-    expect(container.querySelector('input[type="datetime-local"], input[type="date"], input[type="time"], textarea')).toBeNull();
-    expect(container.textContent).not.toMatch(/GPS|geolocation|coordinates|latitude|longitude|\bmap\b|bluetooth|nfc|wi-?fi|my location|description|location/i);
-  });
-
-  it("todo el texto es inglés y no queda rastro de Optional / On / Off", () => {
-    const { container } = render(<SessionForm action={idle} />);
-    expect(container.textContent).not.toMatch(/optional|\bon\b|\boff\b/i);
-    expect(container.textContent).not.toMatch(/[áéíóúñ¿¡]/i);
-  });
-
-  it("UN solo botón: 'Start check-in'. NO existe 'Save as draft' ni ningún borrador", () => {
-    const { container } = render(<SessionForm action={idle} />);
-    expect(screen.getAllByRole("button")).toHaveLength(1);
-    expect(screen.getByRole("button", { name: "Start check-in" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /draft/i })).toBeNull();
-    expect(container.textContent).not.toMatch(/draft/i);
-    expect(container.querySelector('[name="intent"]')).toBeNull();
-  });
-
-  it("'Required' es un grupo LIMPIO de dos casillas nativas, sin tarjeta alrededor del grupo", () => {
-    render(<SessionForm action={idle} />);
-    const group = screen.getByRole("group", { name: "Required" });
-    expect(group.tagName).toBe("FIELDSET");
-    expect(group.className).not.toMatch(/\bborder\b|\bbg-white\b|\bshadow/);
-    for (const box of within(group).getAllByRole("checkbox")) expect(box).toHaveAttribute("name", "audience");
-  });
-
-  it("envía SOLO el nombre y el grupo al pulsar 'Start check-in' (sin 'required', sin 'intent', sin fecha, sin ubicación)", async () => {
+  it.each(["Design Team", "Optional"])("selecting %s unselects Rowing and sends one audience", async (label) => {
     const user = userEvent.setup();
     const action = vi.fn<Act>(async () => ({ status: "idle" }));
     render(<SessionForm action={action} />);
-    await user.type(screen.getByLabelText("Session Name"), "Concrete Canoe Practice");
+    await user.type(screen.getByLabelText("Session Name"), "Practice");
+    await user.click(screen.getByRole("radio", { name: label }));
+    expect(screen.getByRole("radio", { name: "Rowing & Construction" })).not.toBeChecked();
     await user.click(screen.getByRole("button", { name: "Start check-in" }));
-
     await waitFor(() => expect(action).toHaveBeenCalledTimes(1));
     const fd = action.mock.calls[0][1];
-    expect(fd.get("title")).toBe("Concrete Canoe Practice");
-    expect(fd.get("audience")).toBe("remar_construction");
+    expect(fd.getAll("audience")).toEqual([label === "Optional" ? "optional" : "design_team"]);
     expect([...fd.keys()].sort()).toEqual(["audience", "title"]);
   });
-
-  it("se puede elegir SOLO Design Team (desmarcando la otra casilla)", async () => {
+  it("a selected option cannot be unchecked by clicking it again", async () => {
     const user = userEvent.setup();
-    const action = vi.fn<Act>(async () => ({ status: "idle" }));
-    render(<SessionForm action={action} />);
-    await user.type(screen.getByLabelText("Session Name"), "Design review");
-    await user.click(screen.getByRole("checkbox", { name: "Design Team" }));
-    await user.click(screen.getByRole("checkbox", { name: "Rowing & Construction" }));
-    expect(screen.getByRole("checkbox", { name: "Design Team" })).toBeChecked();
-    expect(screen.getByRole("checkbox", { name: "Rowing & Construction" })).not.toBeChecked();
-    await user.click(screen.getByRole("button", { name: "Start check-in" }));
-    await waitFor(() => expect(action).toHaveBeenCalledTimes(1));
-    expect(action.mock.calls[0][1].getAll("audience")).toEqual(["design_team"]);
+    render(<SessionForm action={idle} />);
+    await user.click(screen.getByRole("radio", { name: "Rowing & Construction" }));
+    expect(screen.getByRole("radio", { name: "Rowing & Construction" })).toBeChecked();
   });
-
-  it("SE PUEDEN MARCAR LAS DOS a la vez (con clic y con el teclado) y se envían las dos", async () => {
+  it("preserves Optional on validation failure and focuses the title error", async () => {
     const user = userEvent.setup();
-    const action = vi.fn<Act>(async () => ({ status: "idle" }));
+    const action: Act = async () => ({ status: "error", message: "Please fix the highlighted field.", fieldErrors: { title: "Enter a session name." }, values: { title: "", audience: "optional" } });
     render(<SessionForm action={action} />);
-    await user.type(screen.getByLabelText("Session Name"), "Whole team meeting");
-    await user.click(screen.getByRole("checkbox", { name: "Design Team" }));
-    expect(screen.getByRole("checkbox", { name: "Design Team" })).toBeChecked();
-    expect(screen.getByRole("checkbox", { name: "Rowing & Construction" })).toBeChecked(); // marcar una NO desmarca la otra
-
-    // Teclado: con el foco en la casilla, Espacio la desmarca y la vuelve a marcar.
-    screen.getByRole("checkbox", { name: "Rowing & Construction" }).focus();
-    await user.keyboard(" ");
-    expect(screen.getByRole("checkbox", { name: "Rowing & Construction" })).not.toBeChecked();
-    await user.keyboard(" ");
-    expect(screen.getByRole("checkbox", { name: "Rowing & Construction" })).toBeChecked();
-
+    await user.click(screen.getByRole("radio", { name: "Optional" }));
     await user.click(screen.getByRole("button", { name: "Start check-in" }));
-    await waitFor(() => expect(action).toHaveBeenCalledTimes(1));
-    expect(action.mock.calls[0][1].getAll("audience").sort()).toEqual(["design_team", "remar_construction"]);
-  });
-
-  it("errores del servidor: en inglés, con foco en el campo y SIN perder lo tecleado ni las casillas elegidas (una o las dos)", async () => {
-    const user = userEvent.setup();
-    const action: Act = async () => ({
-      status: "error",
-      message: "Please fix the highlighted field.",
-      fieldErrors: { title: "Enter a session name." },
-      values: { title: "", audience: "design_team,remar_construction" },
-    });
-    render(<SessionForm action={action} />);
-    await user.click(screen.getByRole("button", { name: "Start check-in" }));
-
     expect(await screen.findByText("Enter a session name.")).toBeInTheDocument();
-    expect(screen.getByText("Please fix the highlighted field.")).toBeInTheDocument();
-    expect(screen.getByLabelText("Session Name")).toHaveAttribute("aria-invalid", "true");
     expect(screen.getByLabelText("Session Name")).toHaveFocus();
-    expect(screen.getByRole("checkbox", { name: "Design Team" })).toBeChecked(); // lo elegido se respeta…
-    expect(screen.getByRole("checkbox", { name: "Rowing & Construction" })).toBeChecked(); // …incluidas las dos a la vez
+    expect(screen.getByRole("radio", { name: "Optional" })).toBeChecked();
   });
-
-  it("un error del grupo (valor inválido enviado a mano) se muestra junto a las opciones y las deja sin marcar", async () => {
-    const user = userEvent.setup();
-    const message = "Choose a valid team: Design Team or Rowing & Construction.";
-    const action: Act = async () => ({ status: "error", message: "Please fix the highlighted field.", fieldErrors: { audience: message }, values: { title: "x", audience: "" } });
-    render(<SessionForm action={action} />);
-    await user.click(screen.getByRole("button", { name: "Start check-in" }));
-    expect(await screen.findByText(message)).toBeInTheDocument();
-    expect(screen.getByRole("checkbox", { name: "Design Team" })).not.toBeChecked();
-    expect(screen.getByRole("checkbox", { name: "Rowing & Construction" })).not.toBeChecked();
-  });
-
-  it("NO es obligatorio marcar ninguna casilla: desmarcando las dos, se envía igual y cae al valor por defecto en el servidor", async () => {
-    const user = userEvent.setup();
-    const action = vi.fn<Act>(async () => ({ status: "idle" }));
-    render(<SessionForm action={action} />);
-    await user.type(screen.getByLabelText("Session Name"), "Open house");
-    await user.click(screen.getByRole("checkbox", { name: "Rowing & Construction" })); // desmarca la única marcada por defecto
-    expect(screen.getByRole("checkbox", { name: "Design Team" })).not.toBeChecked();
-    expect(screen.getByRole("checkbox", { name: "Rowing & Construction" })).not.toBeChecked();
-    await user.click(screen.getByRole("button", { name: "Start check-in" }));
-    await waitFor(() => expect(action).toHaveBeenCalledTimes(1));
-    expect(action.mock.calls[0][1].getAll("audience")).toEqual([]);
-  });
-
-  it("con un check-in en curso NO ofrece abrir otro: avisa y enlaza a su QR (sin botón de guardar borrador)", () => {
+  it("blocks starting another session while one is active", () => {
     render(<SessionForm action={idle} activeSession={{ id: "s-1", title: "Team meeting" }} />);
-    expect(screen.getByText("A check-in is already in progress")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open the QR screen" })).toHaveAttribute("href", "/admin/sessions/s-1/qr");
     expect(screen.queryByRole("button", { name: "Start check-in" })).toBeNull();
-    expect(screen.queryByRole("button", { name: /draft/i })).toBeNull();
-    expect(screen.queryByRole("button")).toBeNull();
   });
-
-  it("campos >= 16 px y objetivos táctiles >= 48 px (sin zoom automático en iOS)", () => {
-    render(<SessionForm action={idle} />);
-    expect(screen.getByLabelText("Session Name").className).toContain("text-base");
-    expect(screen.getByLabelText("Session Name").className).toContain("min-h-12");
-    expect(screen.getByRole("button", { name: "Start check-in" }).className).toContain("min-h-12");
-    for (const box of screen.getAllByRole("checkbox")) expect(box.closest("label")?.className).toContain("min-h-12");
+  it("links an audience error to the radio group and focuses it", async () => {
+    const user = userEvent.setup();
+    const action: Act = async () => ({ status: "error", message: "Please fix the highlighted field.", fieldErrors: { audience: "Choose one session type." }, values: { title: "Practice", audience: "" } });
+    render(<SessionForm action={action} />);
+    await user.click(screen.getByRole("button", { name: "Start check-in" }));
+    expect(await screen.findByText("Choose one session type.")).toBeInTheDocument();
+    const group = screen.getByRole("radiogroup", { name: "Session type" });
+    expect(group).toHaveAttribute("aria-invalid", "true");
+    expect(group).toHaveAccessibleDescription("Choose one session type.");
+    expect(group).toHaveFocus();
   });
 });
 

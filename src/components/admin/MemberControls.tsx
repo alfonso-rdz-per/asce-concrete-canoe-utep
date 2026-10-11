@@ -14,11 +14,13 @@ export function MemberStatusControl({
   memberName,
   active,
   action,
+  deleteAction,
 }: {
   memberId: string;
   memberName: string;
   active: boolean;
   action: MemberAction;
+  deleteAction?: MemberAction;
 }) {
   const [state, formAction] = useActionState(action, IDLE);
 
@@ -53,6 +55,28 @@ export function MemberStatusControl({
       )}
       {state.status === "error" ? <Alert variant="danger">{state.message}</Alert> : null}
       {state.status === "success" && state.message ? <Alert variant="success">{state.message}</Alert> : null}
+      {!active && deleteAction ? <DeleteMemberControl memberId={memberId} memberName={memberName} action={deleteAction} /> : null}
+    </div>
+  );
+}
+
+function DeleteMemberControl({ memberId, memberName, action }: { memberId: string; memberName: string; action: MemberAction }) {
+  const [state, formAction] = useActionState(action, IDLE);
+  return (
+    <div className="space-y-3">
+      <ConfirmDialog
+        triggerLabel="Delete member"
+        triggerVariant="danger"
+        title={`Permanently delete ${memberName}?`}
+        description="This permanently deletes the profile, check-ins, attendance corrections and remembered devices. Meeting summaries will be recalculated. This cannot be undone. Existing audit records are kept."
+        confirmLabel="Delete member permanently"
+        pendingLabel="Deleting…"
+        danger
+        action={formAction}
+        hidden={{ id: memberId }}
+        state={state}
+      />
+      {state.status === "error" ? <Alert variant="danger">{state.message}</Alert> : null}
     </div>
   );
 }

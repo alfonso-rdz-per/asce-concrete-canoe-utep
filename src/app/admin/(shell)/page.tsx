@@ -48,7 +48,7 @@ export default async function DashboardPage() {
       <section aria-label="Team overview" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Total Members" value={members.length} />
         <StatCard label="Total Meetings" value={data?.totalMeetings ?? 0} />
-        <StatCard label="Average Attendance" value={average === null ? "—" : `${average}%`} hint={average === null ? "No meetings to average yet" : "Meetings for each member's group"} />
+        <StatCard label="Average Attendance" value={average === null ? "—" : `${average}%`} hint={average === null ? "No meetings to average yet" : "Required meetings for each member"} />
         <StatCard
           label="Active Check-In"
           value={active ? "In Progress" : "No"}

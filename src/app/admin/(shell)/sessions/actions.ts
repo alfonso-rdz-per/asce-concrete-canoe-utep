@@ -6,7 +6,7 @@ import type { ActionState } from "@/lib/action-state";
 import { requireAdmin } from "@/lib/auth/session";
 import { closeSession, createAndStartSession, deleteSession, startSession } from "@/lib/data/sessions";
 import { NOT_FOUND_SESSION, type UserFacingError } from "@/lib/errors";
-import { isTeamGroup } from "@/lib/session-audience";
+import { isSelectableAudience } from "@/lib/session-audience";
 import { idSchema } from "@/lib/validation/member";
 import { parseSessionForm } from "@/lib/validation/session";
 
@@ -18,9 +18,9 @@ import { parseSessionForm } from "@/lib/validation/session";
  */
 function echoValues(formData: FormData): Record<string, string> {
   const title = formData.get("title");
-  // Las casillas marcadas (una o las dos) se devuelven separadas por comas para volver a pintar el formulario.
-  const audience = formData.getAll("audience").filter(isTeamGroup);
-  return { title: typeof title === "string" ? title.slice(0, 300) : "", audience: audience.join(",") };
+  // Echo the selected session type after validation failure.
+  const audience = formData.get("audience");
+  return { title: typeof title === "string" ? title.slice(0, 300) : "", audience: isSelectableAudience(audience) ? audience : "" };
 }
 
 function errorState(error: UserFacingError, formData?: FormData): ActionState {

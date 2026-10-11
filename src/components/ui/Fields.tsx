@@ -122,6 +122,32 @@ export function CheckboxGroupField({
   );
 }
 
+/** Native radios enforce a single choice and support keyboard navigation. */
+export function RadioGroupField({ legend, name, options, defaultValue, error }: {
+  legend: string;
+  name: string;
+  options: ReadonlyArray<{ value: string; label: string }>;
+  defaultValue: string;
+  error?: string;
+}) {
+  const errorId = error ? `field-${name}-error` : undefined;
+  const legendId = `field-${name}-legend`;
+  return (
+    <fieldset aria-describedby={errorId} className="space-y-1.5">
+      <legend id={legendId} className="text-sm font-semibold text-ink">{legend}</legend>
+      <div role="radiogroup" aria-labelledby={legendId} aria-invalid={error ? true : undefined} aria-describedby={errorId} tabIndex={-1} className="flex flex-col gap-2 sm:flex-row sm:gap-3">
+        {options.map((option) => (
+          <label key={option.value} className="flex min-h-12 flex-1 cursor-pointer items-center gap-3 rounded-lg border border-line bg-white px-4 text-base font-semibold text-ink has-[:checked]:border-blue has-[:checked]:bg-mist">
+            <input type="radio" name={name} value={option.value} defaultChecked={defaultValue === option.value} required aria-describedby={errorId} className="h-5 w-5 shrink-0 accent-blue" />
+            {option.label}
+          </label>
+        ))}
+      </div>
+      {error ? <p id={errorId} role="alert" className="text-sm font-medium text-danger">{error}</p> : null}
+    </fieldset>
+  );
+}
+
 export function SelectField({
   label,
   name,

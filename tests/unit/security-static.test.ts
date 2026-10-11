@@ -48,7 +48,7 @@ describe("Server Actions del panel: cada una re-verifica al administrador", () =
 
   it("todas las acciones de miembros empiezan por `await requireAdmin()` (alcanzables por POST directo)", () => {
     const fns = exportedFunctions(ACTIONS);
-    expect(fns.map((f) => f.name).sort()).toEqual(["createMemberAction", "setAttendanceAction", "setMemberActiveAction", "updateMemberAction"]);
+    expect(fns.map((f) => f.name).sort()).toEqual(["createMemberAction", "deleteMemberAction", "setAttendanceAction", "setMemberActiveAction", "updateMemberAction"]);
     for (const fn of fns) {
       expect(fn.isAsync, fn.name).toBe(true);
       expect(fn.first, `${fn.name}: la PRIMERA sentencia debe ser requireAdmin()`).toMatch(/await requireAdmin\(\)/);

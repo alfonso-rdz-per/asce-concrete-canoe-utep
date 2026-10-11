@@ -228,6 +228,23 @@ describe("ConfirmDialog", () => {
 });
 
 describe("controles de estado", () => {
+  it("offers deletion only for inactive profiles and requires confirmation", async () => {
+    const user = userEvent.setup();
+    const action = vi.fn(async () => ({ status: "idle" as const }));
+    const { rerender } = render(<MemberStatusControl memberId="m-1" memberName="Ana" active action={action} deleteAction={action} />);
+    expect(screen.queryByRole("button", { name: "Delete member" })).toBeNull();
+    rerender(<MemberStatusControl memberId="m-1" memberName="Ana" active={false} action={action} deleteAction={action} />);
+    expect(screen.getByRole("button", { name: "Reactivate member" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Delete member" }));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveAccessibleName("Permanently delete Ana?");
+    expect(dialog).toHaveTextContent("This cannot be undone.");
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(action).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Delete member" }));
+    await user.click(screen.getByRole("button", { name: "Delete member permanently" }));
+    await waitFor(() => expect(action).toHaveBeenCalledTimes(1));
+  });
   it("miembro activo: ofrece desactivar (con confirmación) y explica que se conserva el historial", () => {
     render(<MemberStatusControl memberId="m-1" memberName="Ana" active action={async () => ({ status: "idle" })} />);
     expect(screen.getByRole("button", { name: "Deactivate member" })).toBeInTheDocument();

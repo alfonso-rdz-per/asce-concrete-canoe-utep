@@ -69,7 +69,7 @@ test.beforeAll(async () => {
   await mk(2, NAME.beto);
   await mk(3, NAME.carla);
   const dani = await mk(4, NAME.dani, true);
-  // Reunión general: asisten Ana (general) y Dani (Design Team, OTRO grupo). Reunión de Design Team: asiste Dani.
+  // Rowing expects everyone, including Dani from Design Team. Design expects Dani.
   remarId = await seedSession(TITLE_REMAR, "remar_construction", [ana, dani]);
   designId = await seedSession(TITLE_DESIGN, "design_team", [dani]);
 });
@@ -125,7 +125,7 @@ test("1. Attendance aparece en el menú y lista las reuniones cerradas con grupo
 test("2. el filtro por grupo (All / Design Team / Rowing & Construction) es un enlace, marca el activo y filtra", async ({ page }) => {
   await page.goto("/admin/attendance");
   const nav = page.getByRole("navigation", { name: "Filter by group" });
-  await expect(nav.getByRole("link")).toHaveText(["All", "Design Team", "Rowing & Construction"]);
+  await expect(nav.getByRole("link")).toHaveText(["All", "Design Team", "Rowing & Construction", "Other"]);
   await expect(nav.getByRole("link", { name: "All" })).toHaveAttribute("aria-current", "page");
   await expect(meetingLink(page, TITLE_REMAR)).toBeVisible();
   await expect(meetingLink(page, TITLE_DESIGN)).toBeVisible();
@@ -161,12 +161,12 @@ test("3. el detalle de la reunión muestra presentes / esperados, porcentaje y e
   const s = await summaryNumbers(page);
   expect(s.present).toBeLessThanOrEqual(s.expected);
   expect(s.text).toMatch(/\d+%|—/);
-  // Roster: Ana (presente, con ASCE ID y cargo), Beto y Carla (ausentes). Dani es del Design Team: aparece en la reunión general como raw present pero NO en el roster.
+  // Rowing roster: Ana and Dani present, Beto and Carla absent.
   await expect(rosterRow(page, NAME.ana)).toContainText("Present");
   await expect(rosterRow(page, NAME.ana)).toContainText(`${asceId(1)} · Member`);
   await expect(rosterRow(page, NAME.beto)).toContainText("Absent");
   await expect(rosterRow(page, NAME.carla)).toContainText("Absent");
-  await expect(page.getByText(NAME.dani)).toHaveCount(0);
+  await expect(rosterRow(page, NAME.dani)).toContainText("Present");
   // Un control por miembro ESPERADO (el resumen dice cuántos son) y ninguno para nadie más.
   expect(await rosterItems(page).filter({ has: page.getByRole("button") }).count()).toBe(s.expected);
 

@@ -45,12 +45,14 @@ Never commit `.env.local` (it is in `.gitignore`). Variables that are no longer 
 1. Create the project. Recommended region: US East, close to the Vercel region `iad1`.
 2. **Disable public sign-ups**: Authentication → Sign In / Providers → turn off "Allow new users to sign up".
    (`supabase/config.toml` does this for the local stack only; in the cloud it is a dashboard setting.)
-3. Apply the **15 migrations** in `supabase/migrations/` in order (from `…000000_schema.sql` to `…001400_session_audience_both_views.sql`)
+3. Apply the **18 migrations** in `supabase/migrations/` in order (from `…000000_schema.sql` to `…001700_delete_inactive_members.sql`)
    with the CLI (`npx supabase link`, then `npx supabase db push`) or by pasting them one by one into the SQL Editor. Never edit a migration
    that has already been applied; changes go in new migrations. **Migrations 14 (`…001300_session_audience_both.sql`) and 15
    (`…001400_session_audience_both_views.sql`) must run SEPARATELY, in that order**: PostgreSQL does not allow using a newly added enum
    value in the same transaction that added it. When pasting migration 1 into the SQL Editor, choose **"Run without RLS"** (migration 2
    enables RLS).
+   **Migrations 16 (`20260919001500_session_optional.sql`) and 17 (`20260919001600_session_attendance_rules.sql`) also run separately, in that order.** Apply both before deploying this app version. Existing sessions retain historical attendance calculations; new sessions use the new rules.
+   **Migration 18 (`20260919001700_delete_inactive_members.sql`) enables permanent deletion of inactive profiles.** It removes their attendance and remembered devices, retains audit events, and rejects deletion of active members. Apply it before using Delete member.
 4. **Admins**: there is no admins table. **Every confirmed Supabase Auth user is an admin**: Authentication → Users → "Add user"
    (email + password of at least 12 characters, with *Auto Confirm User*), optionally with `{"display_name": "First Last"}` in the user
    metadata. No SQL is needed. Only create users who should be admins; see [ADMIN-ACCESS.md](ADMIN-ACCESS.md).

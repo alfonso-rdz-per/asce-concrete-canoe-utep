@@ -2,7 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Result } from "@/lib/data/members";
 import { describeDbError, NOT_FOUND_SESSION, type UserFacingError } from "@/lib/errors";
-import type { SessionAudience } from "@/lib/session-audience";
+import { isForMember, type SessionAudience } from "@/lib/session-audience";
 import type { SessionInput } from "@/lib/validation/session";
 
 /**
@@ -10,7 +10,7 @@ import type { SessionInput } from "@/lib/validation/session";
  * de verdad. La regla "una sola sesión activa" y el ciclo draft -> active -> closed los impone la BASE DE DATOS
  * (índice único y trigger); aquí solo se traducen sus errores a mensajes en inglés.
  */
-export const SESSION_COLUMNS = "id, title, description, location, scheduled_at, status, audience, opened_at, opened_by, closed_at, created_at";
+export const SESSION_COLUMNS = "id, title, description, location, scheduled_at, status, audience, attendance_rule_version, opened_at, opened_by, closed_at, created_at";
 
 /** Tope defensivo de las listas (un semestre son decenas de reuniones). */
 export const SESSION_LIST_LIMIT = 200;
@@ -25,8 +25,9 @@ export interface Session {
   location: string | null;
   scheduled_at: string;
   status: SessionStatus;
-  /** A qué equipo(s) va dirigida (el "Required" de New Session): Design Team, Rowing & Construction o los dos ("both"). */
+  /** Session type; historical "both" is displayed under Rowing & Construction. */
   audience: SessionAudience;
+  attendance_rule_version?: number;
   opened_at: string | null;
   /** Administrador que abrió el check-in (lo fija la BD al activarla). null en borradores o si ese usuario se borró. */
   opened_by: string | null;
@@ -140,17 +141,16 @@ export interface LiveAttendee {
 
 export interface SessionLive {
   session: Pick<Session, "id" | "title" | "location" | "status" | "audience" | "scheduled_at" | "opened_by">;
-  /** Check-ins de esta sesión. */
+  /** Present attendees inside the expected audience; attendees includes guests too. */
   count: number;
-  /** Miembros activos DEL GRUPO (o de los dos grupos, si es "both") al que va dirigida la sesión (denominador de "12 / 25"). */
+  /** Active members expected under this session's attendance rules. */
   total: number;
   attendees: LiveAttendee[];
 }
 
 /** Miembros activos esperados en una sesión según su audiencia: un grupo, o la suma de los dos si va dirigida a ambos equipos. */
-function activeMembersFor(audience: SessionAudience, designTeam: number, general: number): number {
-  if (audience === "both") return designTeam + general;
-  return audience === "design_team" ? designTeam : general;
+function activeMembersFor(audience: SessionAudience, designTeam: number, general: number, ruleVersion: number = 2): number {
+  return (isForMember(audience, true, ruleVersion) ? designTeam : 0) + (isForMember(audience, false, ruleVersion) ? general : 0);
 }
 
 /**
@@ -159,10 +159,10 @@ function activeMembersFor(audience: SessionAudience, designTeam: number, general
  */
 export async function getSessionLive(sb: SupabaseClient, id: string): Promise<Result<SessionLive>> {
   const [session, checkins, designTeam, general] = await Promise.all([
-    sb.from("sessions").select("id, title, location, status, audience, scheduled_at, opened_by").eq("id", id).maybeSingle(),
+    sb.from("sessions").select("id, title, location, status, audience, attendance_rule_version, scheduled_at, opened_by").eq("id", id).maybeSingle(),
     sb
       .from("checkins")
-      .select("id, checked_in_at, members(name, position)")
+      .select("id, checked_in_at, members(name, position, is_design_team)")
       .eq("session_id", id)
       .order("checked_in_at", { ascending: false })
       .limit(LIVE_ATTENDEE_LIMIT),
@@ -176,19 +176,23 @@ export async function getSessionLive(sb: SupabaseClient, id: string): Promise<Re
   if (designTeam.error) return fail(describeDbError(designTeam.error));
   if (general.error) return fail(describeDbError(general.error));
 
-  type Row = { id: string; checked_in_at: string; members: { name: string; position: string } | { name: string; position: string }[] | null };
+  type LiveMember = { name: string; position: string; is_design_team: boolean };
+  type Row = { id: string; checked_in_at: string; members: LiveMember | LiveMember[] | null };
+  const sessionRow = session.data as { audience: SessionAudience; attendance_rule_version?: number };
   const attendees: LiveAttendee[] = [];
+  let expectedPresent = 0;
   for (const row of (checkins.data ?? []) as unknown as Row[]) {
     const member = Array.isArray(row.members) ? row.members[0] : row.members;
     if (!member) continue; // un check-in cuyo miembro no es visible no se lista
     attendees.push({ id: row.id, name: member.name, position: member.position, checkedInAt: row.checked_in_at });
+    if (isForMember(sessionRow.audience, member.is_design_team, sessionRow.attendance_rule_version)) expectedPresent++;
   }
   return {
     ok: true,
     data: {
       session: session.data as unknown as SessionLive["session"],
-      count: attendees.length,
-      total: activeMembersFor((session.data as { audience: SessionAudience }).audience, designTeam.count ?? 0, general.count ?? 0),
+      count: expectedPresent,
+      total: activeMembersFor(sessionRow.audience, designTeam.count ?? 0, general.count ?? 0, sessionRow.attendance_rule_version),
       attendees,
     },
   };

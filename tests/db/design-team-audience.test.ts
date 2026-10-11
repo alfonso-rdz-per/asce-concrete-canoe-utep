@@ -31,7 +31,7 @@ describe("Design Team y grupo de la sesión", () => {
 
   /** Sesión CERRADA del grupo indicado con los check-ins pedidos. */
   async function closedSession(audience: "design_team" | "remar_construction" | "both", present: string[] = []): Promise<string> {
-    const r = await db.query<{ id: string }>("insert into public.sessions (title, scheduled_at, audience) values ($1, now(), $2) returning id", [`Reunión ${++seq}`, audience]);
+    const r = await db.query<{ id: string }>("insert into public.sessions (title, scheduled_at, audience, attendance_rule_version) values ($1, now(), $2, 1) returning id", [`Reunión ${++seq}`, audience]);
     const id = r.rows[0].id;
     await db.query("update public.sessions set status = 'active' where id = $1", [id]);
     try {
@@ -89,11 +89,11 @@ describe("Design Team y grupo de la sesión", () => {
   });
 
   describe("sessions.audience (migraciones 12 y 14)", () => {
-    it("es un enum de EXACTAMENTE tres valores (los dos equipos y \"both\") y `required` ya no existe", async () => {
+    it("es un enum de cuatro valores (incluido Optional) (los dos equipos y \"both\") y `required` ya no existe", async () => {
       const labels = await db.query<{ enumlabel: string }>(
         "select e.enumlabel from pg_enum e join pg_type t on t.oid = e.enumtypid where t.typname = 'session_audience' order by e.enumsortorder",
       );
-      expect(labels.rows.map((r) => r.enumlabel)).toEqual(["design_team", "remar_construction", "both"]);
+      expect(labels.rows.map((r) => r.enumlabel)).toEqual(["design_team", "remar_construction", "both", "optional"]);
       const cols = await db.query<{ column_name: string }>("select column_name from information_schema.columns where table_schema = 'public' and table_name = 'sessions'");
       const names = cols.rows.map((c) => c.column_name);
       expect(names).toContain("audience");
@@ -301,7 +301,16 @@ describe("conversión de datos existentes (migraciones 11 y 12 sobre una base co
       const oldRate = (await c.query("select counted_meetings, attended_meetings from public.member_attendance where member_id = $1", [m1])).rows[0];
       expect(oldRate).toEqual({ counted_meetings: 1, attended_meetings: 1 }); // solo la obligatoria contaba
 
-      for (const f of files.filter((f) => f >= "20260919001000")) await c.query(fs.readFileSync(path.join(dir, f), "utf8"));
+      for (const f of files.filter((f) => f >= "20260919001000" && f < "20260919001500")) await c.query(fs.readFileSync(path.join(dir, f), "utf8"));
+      // Migration 17 must preserve the previous view results on a populated database.
+      await c.query("update public.members set is_design_team = true where id = $1", [m2]);
+      const previousSummary = (await c.query("select * from public.session_attendance_summary order by session_id")).rows;
+      const previousRates = (await c.query("select * from public.member_attendance order by member_id")).rows;
+      for (const f of files.filter((f) => f >= "20260919001500")) await c.query(fs.readFileSync(path.join(dir, f), "utf8"));
+      expect((await c.query("select session_id, present_count, expected_count, rate from public.session_attendance_summary order by session_id")).rows).toEqual(previousSummary);
+      expect((await c.query("select * from public.member_attendance order by member_id")).rows).toEqual(previousRates);
+      expect((await c.query("select attendance_rule_version from public.sessions")).rows.every((r) => r.attendance_rule_version === 1)).toBe(true);
+      await c.query("update public.members set is_design_team = false where id = $1", [m2]);
 
       const sessions = (await c.query<{ id: string; audience: string; title: string; status: string }>("select id, audience, title, status from public.sessions order by title")).rows;
       expect(sessions.map((s) => [s.title, s.audience, s.status])).toEqual([["Obligatoria", "remar_construction", "closed"], ["Opcional", "remar_construction", "closed"]]);

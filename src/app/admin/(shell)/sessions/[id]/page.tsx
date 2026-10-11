@@ -103,6 +103,8 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
               sessionTitle={session.title}
               summary={closedAttendance.data.summary}
               roster={closedAttendance.data.roster}
+              extras={closedAttendance.data.extras}
+              optional={session.audience === "optional"}
               action={setAttendanceAction}
             />
           ) : (
@@ -150,7 +152,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
         <DeleteSessionControl
           sessionId={session.id}
           active={session.status === "active"}
-          checkinCount={live?.ok ? live.data.count : 0}
+          checkinCount={live?.ok ? live.data.attendees.length : 0}
           action={deleteSessionAction}
         />
       </Card>

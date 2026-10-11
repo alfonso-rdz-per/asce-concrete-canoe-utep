@@ -18,28 +18,33 @@ todavía no cuenta para ningún porcentaje. La lista de sesiones usa los check-i
 
 ## Población esperada, `expected_count`, `present_count` y `rate`
 
-Todo sale de `session_attendance.counts_toward_rate`, la misma marca que alimenta el **porcentaje individual** de cada miembro (`member_attendance`).
+El roster y el resumen salen de `session_attendance.is_expected`. El **porcentaje individual** (`member_attendance`) usa `counts_toward_rate`,
+que coincide con `is_expected` salvo en Optional: esas reuniones nunca cuentan para el porcentaje individual.
 Una fila (reunión, miembro) cuenta cuando:
 
 1. la reunión está **cerrada**;
-2. va dirigida al **grupo del miembro** (`Design Team` ↔ casilla `is_design_team`; `Rowing & Construction` ↔ el resto) o a **los dos equipos** (`both`, cuenta para todos);
+2. `Design Team` espera únicamente a miembros con `is_design_team`; `Rowing & Construction` y `Optional` esperan a todos;
 3. y su **pertenencia al equipo estaba vigente en la fecha de la reunión** (`joined_on` ≤ fecha ≤ `deactivated_on`, hora de El Paso; la fecha es cuando
    realmente se abrió el check-in) — **o** su estado efectivo es Present: una asistencia real (o una corrección manual a Present) nunca se descarta.
 
-`session_attendance_summary` (migración 13) resume esas filas por reunión:
+Las sesiones anteriores conservan su población histórica (`attendance_rule_version = 1`); las nuevas usan la versión 2. El antiguo valor `both`
+se muestra y filtra como Rowing & Construction. No se borran ni reclasifican registros en la base de datos.
+
+`session_attendance_summary` (actualizada en la migración 17) resume esas filas por reunión:
 
 | Columna | Significado |
 |---|---|
 | `session_id` | La reunión |
-| `expected_count` | Filas con `counts_toward_rate` (miembros esperados) |
+| `expected_count` | Filas con `is_expected` (miembros esperados, también en Optional) |
 | `present_count` | De esas filas, las de estado efectivo `present`. **Nunca supera a `expected_count`** |
 | `rate` | Entero de 0 a 100, o `NULL` si `expected_count = 0`. Se muestra «—» (nunca «0 %») |
+| `extra_count` | Presentes fuera del grupo esperado, listados por separado |
 
 Consecuencias, todas intencionales:
 
 - **No es «activos hoy».** Una baja posterior no cambia el historial de una reunión ya celebrada, y quien se une después no aparece como ausente en reuniones anteriores.
-- **Otro grupo no cuenta.** Un miembro que hace check-in en una reunión de otro grupo queda registrado (el check-in existe), pero no entra en presentes, esperados ni porcentaje, y no aparece en el roster.
-- **Coherencia.** La suma de `expected_count` de todas las reuniones es igual a la suma de `counted_meetings` de todos los miembros, y la de `present_count` a la de `attended_meetings`.
+- **Extras de Design Team.** Cualquier miembro activo puede hacer check-in. Si el equipo tiene 10 miembros y asisten 5 de Design más 5 de otro grupo, el resumen muestra 5 / 10 = 50% y una lista de 5 extra attendees. Los extras no afectan los porcentajes de esa reunión ni sus porcentajes individuales.
+- **Optional.** Registra asistentes y ausentes, con todos como esperados; no agrega reuniones ni asistencias al porcentaje individual, incluso con correcciones manuales.
 - **Redondeo.** `rate` usa la misma aritmética (`float8`) y la misma regla (mitades hacia arriba) que `Math.round(attended / counted * 100)` de la aplicación
   (`src/lib/attendance.ts`). `round(present * 100.0 / expected)` con `numeric` **no** es equivalente (23 de 40 = 57,5 %: la aplicación da 57 y `numeric` 58).
 - Una reunión sin ningún miembro en la base de datos no tiene fila en el resumen; la aplicación la trata como 0 de 0.
@@ -47,10 +52,9 @@ Consecuencias, todas intencionales:
 ## Pantallas
 
 - **`/admin/attendance`**: reuniones cerradas, las más recientes primero (tope de 200). Cada una muestra nombre, grupo, fecha, `presentes / esperados` y
-  porcentaje, y enlaza a su detalle. Filtro por grupo: `All`, `Design Team`, `Rowing & Construction` (enlaces `?group=…`; cualquier otro valor es `All`; cada equipo incluye también las reuniones dirigidas a los dos).
+  porcentaje, y enlaza a su detalle. Filtros: `All`, `Design Team`, `Rowing & Construction`, `Other` (Optional). Se aplican también a las sesiones anteriores; las antiguas `both` están bajo Rowing & Construction.
 - **`/admin/sessions/[id]`** (reunión cerrada): resumen y **roster** de los miembros esperados (nombre, ASCE ID, cargo, Present / Absent). El roster se pide a la base
-  de datos (`session_attendance` filtrada por `counts_toward_rate`); la aplicación **no** reconstruye la población. Como solo se pintan los esperados,
-  desde la interfaz no se puede elegir a un miembro de otro grupo ni fuera de esa población.
+  de datos (`session_attendance` filtrada por `is_expected`); la aplicación **no** reconstruye la población. Los extras aparecen en una lista separada.
 - La ficha de cada miembro conserva su historial y su porcentaje (`attended / counted`; sin reuniones que cuenten es «—»).
 
 ## Correcciones manuales (Present ↔ Absent)

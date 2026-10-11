@@ -76,7 +76,7 @@ function AttendanceRow({ memberId, memberName, row, action }: { memberId: string
       <th scope="row" className="py-3 pr-4 align-top font-semibold text-ink">
         <span className="block">{row.title}</span>
         <span className="block text-sm font-normal text-muted sm:hidden">{row.dateLabel}</span>
-        {row.forMember ? null : <span className="block text-sm font-normal text-muted">{AUDIENCE_LABEL[row.audience]} · not counted in the percentage</span>}
+        {row.forMember && row.audience !== "optional" ? null : <span className="block text-sm font-normal text-muted">{AUDIENCE_LABEL[row.audience]} · not counted in the percentage</span>}
       </th>
       <td className="hidden px-4 py-3 align-top text-muted sm:table-cell">{row.dateLabel}</td>
       <td className="px-4 py-3 align-top">

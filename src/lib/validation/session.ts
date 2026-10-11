@@ -1,12 +1,5 @@
-/**
- * Validación del formulario de nueva sesión (servidor). Los mensajes están en inglés (se muestran al usuario).
- *
- * El formulario SOLO pide el nombre de la sesión (`title`) y a qué grupo(s) va dirigida (`audience`, la opción "Required": dos casillas,
- * Design Team y Rowing & Construction, que se pueden marcar a la vez; ya no es un booleano). NO pide descripción, ubicación ni
- * fecha/hora: la fecha la pone el SERVIDOR al crear y quién/cuándo empezó lo fija la base de datos al activarla. Aunque alguien
- * envíe esos campos a mano, aquí se ignoran (la ubicación de las sesiones antiguas sigue existiendo, solo que ya no se pide).
- */
-import { audienceFromGroups, DEFAULT_AUDIENCE, isTeamGroup, type SessionAudience, type TeamGroup } from "@/lib/session-audience";
+/** Server validation: name and exactly one session type. Other fields are ignored. */
+import { DEFAULT_AUDIENCE, isSelectableAudience, type SessionAudience } from "@/lib/session-audience";
 
 export type SessionField = "title" | "audience";
 export type SessionFieldErrors = Partial<Record<SessionField, string>>;
@@ -36,20 +29,12 @@ export function parseTitle(raw: string): { value?: string; error?: string } {
   return { value };
 }
 
-const AUDIENCE_ERROR = "Choose a valid team: Design Team or Rowing & Construction.";
+const AUDIENCE_ERROR = "Choose one option: Rowing & Construction, Design Team or Optional.";
 
-/**
- * Cada casilla marcada envía UN valor `audience` (design_team / remar_construction). No es obligatorio marcar ninguna: se puede
- * elegir un equipo, el otro, los dos (-> "both") o NINGUNO (sin casillas marcadas cae al valor por defecto, DEFAULT_AUDIENCE). Solo
- * se rechaza un valor que no sea uno de los dos grupos (por ejemplo, un POST manipulado a mano).
- */
+/** Reject missing or multiple choices, including manipulated POSTs. */
 export function parseAudience(raw: readonly string[]): { value?: SessionAudience; error?: string } {
-  const groups = new Set<TeamGroup>();
-  for (const item of raw) {
-    if (!isTeamGroup(item)) return { error: AUDIENCE_ERROR };
-    groups.add(item);
-  }
-  return { value: audienceFromGroups(groups) ?? DEFAULT_AUDIENCE };
+  if (raw.length !== 1 || !isSelectableAudience(raw[0])) return { error: AUDIENCE_ERROR };
+  return { value: raw[0] };
 }
 
 function textList(formData: FormData, key: string): string[] {

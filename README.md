@@ -28,11 +28,11 @@ person, requires having seen the QR code shown in the room, and keeps an auditab
 - One attendance per member per session, enforced by the database.
 
 **Admin panel** (Supabase Auth; no public sign-up)
-- **Members:** create, edit, deactivate/reactivate, position, and *Design Team* membership.
+- **Members:** create, edit, deactivate/reactivate, position, and *Design Team* membership. Inactive profiles can be permanently deleted with confirmation, including their attendance and remembered devices; audit records remain.
 - **Sessions:** start a check-in (full-screen QR view with a live attendee counter), close it, or delete it.
-- **Team audiences:** a session can target *Design Team*, *Rowing & Construction*, or both teams; each member's percentage only counts
-  the meetings aimed at their group.
-- **Attendance:** history of closed meetings (present / expected / rate, filterable by team), per-member history, and a dashboard with
+- **Session types:** *Rowing & Construction* expects everyone; *Design Team* expects design members and lists guests separately;
+  *Optional* expects everyone and does not affect member attendance percentages.
+- **Attendance:** history of closed meetings (present / expected / rate, filters: All, Design Team, Rowing & Construction, Other), per-member history, and a dashboard with
   every active member's attendance percentage.
 - **Manual corrections:** Present ↔ Absent on closed meetings, stored separately from real check-ins.
 - **Audit log:** manual attendance changes and session deletions are recorded by database triggers in an append-only `audit_log`.

@@ -64,8 +64,8 @@ export interface RosterRow {
 }
 
 /** Filtro por grupo de la pantalla Attendance: todas las reuniones o las de un equipo (incluidas las dirigidas a los dos equipos). */
-export const ATTENDANCE_GROUPS = ["all", ...TEAM_GROUPS] as const;
-export type AttendanceGroup = "all" | TeamGroup;
+export const ATTENDANCE_GROUPS = ["all", ...TEAM_GROUPS, "other"] as const;
+export type AttendanceGroup = "all" | TeamGroup | "other";
 
 /** Valor de `?group=` de la URL -> filtro válido. Cualquier otra cosa (ausente, repetido, manipulado) es "all". */
 export function parseAttendanceGroup(value: unknown): AttendanceGroup {

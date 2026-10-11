@@ -65,7 +65,8 @@ const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0
 // ---------------------------------------------------------------------------------------------------------------------------------
 describe("parseAttendanceGroup", () => {
   it("admite exactamente All, Design Team y Rowing & Construction; cualquier otra cosa es 'all'", () => {
-    expect([...ATTENDANCE_GROUPS]).toEqual(["all", "design_team", "remar_construction"]);
+    expect([...ATTENDANCE_GROUPS]).toEqual(["all", "design_team", "remar_construction", "other"]);
+    expect(parseAttendanceGroup("other")).toBe("other");
     expect(parseAttendanceGroup("design_team")).toBe("design_team");
     expect(parseAttendanceGroup("remar_construction")).toBe("remar_construction");
     expect(parseAttendanceGroup("all")).toBe("all");
@@ -93,6 +94,11 @@ describe("formatRate", () => {
 
 // ---------------------------------------------------------------------------------------------------------------------------------
 describe("listClosedMeetings", () => {
+  it("Other queries Optional sessions exclusively", async () => {
+    const { sb, calls } = fakeSupabase(() => ({ data: [] }));
+    await listClosedMeetings(sb, "other");
+    expect(opsNamed(calls[0], "in")).toEqual([["audience", ["optional"]]]);
+  });
   const sessionRow = (n: number, over: Record<string, unknown> = {}) => ({
     id: uuid(n),
     title: `Reunión ${n}`,
@@ -120,7 +126,7 @@ describe("listClosedMeetings", () => {
       const { sb, calls } = fakeSupabase(() => ({ data: [] }));
       await listClosedMeetings(sb, group);
       expect(opsNamed(calls[0], "eq")).toEqual([["status", "closed"]]);
-      expect(opsNamed(calls[0], "in")).toEqual([["audience", [group, "both"]]]);
+      expect(opsNamed(calls[0], "in")).toEqual([["audience", group === "design_team" ? [group] : [group, "both"]]]);
     }
   });
 
@@ -180,10 +186,11 @@ describe("getSessionAttendanceDetail", () => {
     joined_on: "2026-01-01", deactivated_on: null, created_at: "", updated_at: "", ...over,
   });
   const members = [member(1, "zoe Zamora", { position: "Safety Officer" }), member(2, "Ana Álvarez"), member(3, "ana álvarez", { asce_id: "0009" }), member(4, "Otro Grupo", { is_design_team: true })];
-  const setup = (over: { summary?: unknown; population?: unknown; errors?: Partial<Record<string, { code?: string; message: string }>> } = {}) =>
+  const setup = (over: { summary?: unknown; population?: unknown; extras?: unknown; errors?: Partial<Record<string, { code?: string; message: string }>> } = {}) =>
     fakeSupabase((c) => {
       if (over.errors?.[c.table]) return { error: over.errors[c.table] };
       if (c.table === "session_attendance_summary") return { data: over.summary === undefined ? { session_id: SID, present_count: 1, expected_count: 3, rate: 33 } : over.summary };
+      if (c.table === "session_attendance" && opsNamed(c, "eq").some(([column]) => column === "for_member")) return { data: over.extras ?? [] };
       if (c.table === "session_attendance")
         return {
           data:
@@ -203,7 +210,8 @@ describe("getSessionAttendanceDetail", () => {
     await getSessionAttendanceDetail(sb, SID);
     const [pop] = of("session_attendance");
     expect(selectColumns(pop)).toBe("member_id, status, source");
-    expect(opsNamed(pop, "eq")).toEqual([["session_id", SID], ["counts_toward_rate", true]]);
+    expect(opsNamed(pop, "eq")).toEqual([["session_id", SID], ["is_expected", true]]);
+    expect(opsNamed(of("session_attendance")[1], "eq")).toEqual([["session_id", SID], ["for_member", false], ["status", "present"]]);
     // Nunca se filtra por members.active, por grupo ni por fechas: la lista de miembros solo aporta nombre, ASCE ID y cargo.
     const [m] = of("members");
     expect(opsNamed(m, "eq")).toEqual([]);
@@ -226,9 +234,15 @@ describe("getSessionAttendanceDetail", () => {
     expect(JSON.stringify(r)).not.toContain("Otro Grupo");
   });
 
+  it("returns guest attendees separately from the expected roster", async () => {
+    const r = await getSessionAttendanceDetail(setup({ extras: [{ member_id: uuid(4), status: "present", source: "check_in" }] }).sb, SID);
+    expect(r.ok && r.data.extras.map((m) => m.name)).toEqual(["Otro Grupo"]);
+    expect(r.ok && r.data.roster.some((m) => m.memberId === uuid(4))).toBe(false);
+  });
+
   it("sin nadie esperado o sin fila de resumen: 0 de 0, sin porcentaje y roster vacío (no rompe)", async () => {
     const r = await getSessionAttendanceDetail(setup({ summary: null, population: [] }).sb, SID);
-    expect(r).toEqual({ ok: true, data: { summary: { present: 0, expected: 0, rate: null }, roster: [] } });
+    expect(r).toEqual({ ok: true, data: { summary: { present: 0, expected: 0, rate: null }, roster: [], extras: [] } });
   });
 
   it("los errores de la base de datos se convierten en mensajes para el usuario", async () => {
@@ -320,7 +334,7 @@ describe("guardas estáticas de seguridad de Attendance", () => {
   it("la población esperada NO se reconstruye en la aplicación: nada de active / is_design_team / joined_on / deactivated_on en el código de Attendance", () => {
     const data = code("src/lib/data/attendance.ts");
     const attendanceSection = data.slice(data.indexOf("listClosedMeetings"));
-    expect(attendanceSection).toMatch(/counts_toward_rate/);
+    expect(attendanceSection).toMatch(/is_expected/);
     expect(attendanceSection).not.toMatch(/joined_on|deactivated_on|is_design_team|\.active\b|["']active["']/);
     for (const f of ["src/components/admin/SessionAttendance.tsx", "src/components/admin/AttendanceOverview.tsx"]) {
       expect(code(f), f).not.toMatch(/joined_on|deactivated_on|is_design_team|\.active\b/);

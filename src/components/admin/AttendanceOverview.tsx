@@ -8,6 +8,7 @@ const FILTER_LABEL: Record<AttendanceGroup, string> = {
   all: "All",
   design_team: AUDIENCE_LABEL.design_team,
   remar_construction: AUDIENCE_LABEL.remar_construction,
+  other: "Other",
 };
 
 /** Filtro por grupo: enlaces (GET), así funciona sin JavaScript, se puede compartir la URL y los botones son cómodos al tacto en iPhone. */

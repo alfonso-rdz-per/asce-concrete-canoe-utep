@@ -236,11 +236,11 @@ describe("Integridad de datos", () => {
       await db.closeSession(s);
     });
 
-    it("no se puede borrar un miembro con asistencias (historial protegido); borrar la SESIÓN se prueba en session-delete.test.ts", async () => {
+    it("no se puede borrar un miembro activo con asistencias", async () => {
       const s = await db.activeSession();
       const m = await db.member();
       await db.query(insertCheckin, [s, m, 1, nonce("keep")]);
-      await expect(db.query("delete from public.members where id = $1", [m])).rejects.toMatchObject({ code: "23503" });
+      await expect(db.query("delete from public.members where id = $1", [m])).rejects.toMatchObject({ code: "P0001" });
       await db.closeSession(s);
     });
 

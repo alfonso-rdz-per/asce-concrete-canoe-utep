@@ -154,9 +154,9 @@ describe("RLS y permisos", () => {
       ).rejects.toMatchObject({ code: PERMISSION_DENIED });
     });
 
-    it("edita y desactiva miembros, pero no los borra", async () => {
+    it("edita y desactiva miembros, pero no borra perfiles activos", async () => {
       await db.as(admin(), (q) => q("update public.members set name = 'Daniel P.' where id = $1", [memberId]));
-      await expect(db.as(admin(), (q) => q("delete from public.members where id = $1", [memberId]))).rejects.toMatchObject({ code: PERMISSION_DENIED });
+      await expect(db.as(admin(), (q) => q("delete from public.members where id = $1", [memberId]))).rejects.toMatchObject({ code: "P0001" });
 
       const other = await db.member({ asce_id: "ID300" });
       await expect(

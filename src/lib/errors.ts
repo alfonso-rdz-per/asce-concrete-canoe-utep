@@ -26,6 +26,7 @@ export function describeDbError(err: DbErrorLike | null | undefined): UserFacing
   if (!err) return { message: GENERIC_ERROR };
   const code = err.code ?? "";
   const text = `${err.message ?? ""} ${err.details ?? ""}`;
+  if (text.includes("asce:member_must_be_inactive")) return { message: "Deactivate this member before deleting their profile." };
 
   // Correcciones manuales de asistencia (errores `asce:*` de los triggers y de set_member_attendance).
   if (text.includes("asce:attendance_session_not_closed")) return { message: "Attendance can only be edited for closed meetings." };

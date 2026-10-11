@@ -302,7 +302,7 @@ describe("Supabase REAL: Fases 0–2", () => {
       expect(upd.data?.name).toBe(title("Renombrado"));
 
       expect((await admin.from("members").update({ id: crypto.randomUUID() }).eq("id", m.id)).error?.code).toBe(PERMISSION_DENIED);
-      expect((await admin.from("members").delete().eq("id", m.id)).error?.code).toBe(PERMISSION_DENIED);
+      expect((await admin.from("members").delete().eq("id", m.id)).error?.message).toContain("asce:member_must_be_inactive");
     });
 
     it("desactivar miembro (active=false exige deactivated_on)", async () => {
